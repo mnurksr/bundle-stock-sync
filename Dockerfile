@@ -5,7 +5,7 @@ RUN apk add --no-cache openssl
 FROM base AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev && npm cache clean --force
+RUN npm install --omit=dev && npm cache clean --force
 # Remove CLI packages since we don't need them in production
 RUN npm remove @shopify/cli
 
@@ -13,7 +13,7 @@ RUN npm remove @shopify/cli
 FROM base AS build
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN npm install
 COPY . .
 RUN npx prisma generate
 RUN npm run build
