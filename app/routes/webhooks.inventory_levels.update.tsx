@@ -99,9 +99,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const bundleInventoryResponse = await admin.graphql(
         `#graphql
         query getInventoryLevel($inventoryItemId: ID!, $locationId: ID!) {
-          inventoryLevel(inventoryItemId: $inventoryItemId, locationId: $locationId) {
-            quantities(names: ["available"]) {
-              quantity
+          inventoryItem(id: $inventoryItemId) {
+            inventoryLevel(locationId: $locationId) {
+              quantities(names: ["available"]) {
+                quantity
+              }
             }
           }
         }`,
@@ -114,7 +116,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       );
 
       const bundleInventoryData = await bundleInventoryResponse.json();
-      const currentBundleStock = bundleInventoryData.data?.inventoryLevel?.quantities?.[0]?.quantity || 0;
+      const currentBundleStock = bundleInventoryData.data?.inventoryItem?.inventoryLevel?.quantities?.[0]?.quantity || 0;
 
       if (currentBundleStock === newBundleStock) {
         console.log(`[Up-Sync] Echo prevented: Bundle stock for rule ${rule.id} is already ${newBundleStock}.`);
