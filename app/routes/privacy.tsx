@@ -39,7 +39,7 @@ export default function PrivacyPolicy() {
 
               <Text as="h3" variant="headingSm">Contact Us</Text>
               <Text as="p">
-                For more information about our privacy practices, if you have questions, or if you would like to make a complaint, please contact us by e-mail at <Link url="mailto:support@bundlestocksync.com">support@bundlestocksync.com</Link>.
+                For more information about our privacy practices, if you have questions, or if you would like to make a complaint, please contact us by e-mail at <Link url="mailto:mnurksr@gmail.com">mnurksr@gmail.com</Link>.
               </Text>
             </BlockStack>
           </Card>

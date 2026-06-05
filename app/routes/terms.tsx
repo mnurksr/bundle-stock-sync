@@ -36,7 +36,7 @@ export default function TermsOfService() {
 
               <Text as="h3" variant="headingSm">Contact Us</Text>
               <Text as="p">
-                If you have any questions about these Terms, please contact us at <Link url="mailto:support@bundlestocksync.com">support@bundlestocksync.com</Link>.
+                If you have any questions about these Terms, please contact us at <Link url="mailto:mnurksr@gmail.com">mnurksr@gmail.com</Link>.
               </Text>
             </BlockStack>
           </Card>

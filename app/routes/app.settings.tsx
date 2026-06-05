@@ -104,7 +104,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         throw error;
       }
       return { 
-        error: `Billing Error: ${error.message} - Details: ${JSON.stringify(error.errorData || error)}` 
+        error: `Billing Error: Something went wrong. Please try again or contact support at support@bundlemanager.app` 
       };
     }
   }
@@ -353,7 +353,7 @@ export default function SettingsPage() {
                     If you encounter any issues or have feature requests,
                     please reach out to our support team.
                   </Text>
-                  <a href="mailto:support@bundlestocksync.com" target="_top" style={{ textDecoration: 'none' }}>
+                  <a href="mailto:mnurksr@gmail.com" target="_top" style={{ textDecoration: 'none' }}>
                     <Button>
                       Contact Support
                     </Button>
