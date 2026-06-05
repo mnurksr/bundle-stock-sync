@@ -111,14 +111,23 @@ async function processOrderPaid(shopDomain: string, payload: any, session: any) 
     return;
   }
 
+  console.log(`Processing ${lineItems.length} line items for order ${orderId}`);
+
   // Process each line item
   for (const lineItem of lineItems) {
     const variantId = String(lineItem.variant_id);
     const gidVariantId = `gid://shopify/ProductVariant/${variantId}`;
+    
+    console.log(`Checking line item: ${lineItem.title} (Variant ID: ${variantId})`);
 
     // Check if this variant matches a bundle rule
     const rule = ruleMap.get(variantId) || ruleMap.get(gidVariantId);
-    if (!rule) continue;
+    if (!rule) {
+      console.log(`No rule found for variant ${variantId}, skipping.`);
+      continue;
+    }
+
+    console.log(`Rule matched! Bundle: ${rule.bundleProductTitle}, Base: ${rule.baseProductTitle}, Multiplier: ${rule.multiplier}`);
 
     const quantity = lineItem.quantity || 1;
     const totalAdjustment = quantity * rule.multiplier;
