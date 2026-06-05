@@ -98,12 +98,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           }),
       });
       return { success: true };
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof Response) {
         // Shopify throws a Response to redirect the user to the billing approval page
         throw error;
       }
-      return { error: String(error) };
+      return { 
+        error: `Billing Error: ${error.message} - Details: ${JSON.stringify(error.errorData || error)}` 
+      };
     }
   }
 
@@ -351,9 +353,11 @@ export default function SettingsPage() {
                     If you encounter any issues or have feature requests,
                     please reach out to our support team.
                   </Text>
-                  <Button onClick={() => window.open("mailto:support@bundlestocksync.com", "_top")}>
-                    Contact Support
-                  </Button>
+                  <a href="mailto:support@bundlestocksync.com" target="_top" style={{ textDecoration: 'none' }}>
+                    <Button>
+                      Contact Support
+                    </Button>
+                  </a>
                 </BlockStack>
               </Card>
             </BlockStack>
