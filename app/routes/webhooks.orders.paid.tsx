@@ -20,7 +20,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     await processOrderPaid(shop, payload, session);
   } catch (error) {
-    console.error(`Error processing orders/paid webhook for ${shop}:`, error);
+    console.log(`[Error] Error processing orders/paid webhook for ${shop}:`, error);
     // Still return 200 to prevent Shopify from retrying
   }
 
@@ -63,9 +63,10 @@ async function processOrderPaid(shopDomain: string, payload: any, session: any) 
     const sessions = await db.session.findMany({ where: { shop: shopDomain } });
     const offlineSession = sessions.find(s => !s.isOnline);
     if (!offlineSession) {
-      console.error(`No offline session found for ${shopDomain}`);
+      console.log(`[Error] No offline session found for ${shopDomain}`);
       return;
     }
+    session = offlineSession;
   }
 
   // We need admin API access. For webhook handlers, we use the offline token.
@@ -73,13 +74,14 @@ async function processOrderPaid(shopDomain: string, payload: any, session: any) 
   // We'll construct the admin client manually.
   const accessToken = session?.accessToken;
   if (!accessToken) {
-    console.error(`No access token available for ${shopDomain}`);
+    console.log(`[Error] No access token available for ${shopDomain}`);
     return;
   }
 
   // Simple GraphQL client using fetch
   const adminGraphql = async (query: string, options?: { variables?: Record<string, any> }) => {
-    const response = await fetch(`https://${shopDomain}/admin/api/2026-04/graphql.json`, {
+    // Note: It's safer to use a stable API version instead of 2026-04 which might not exist
+    const response = await fetch(`https://${shopDomain}/admin/api/2025-01/graphql.json`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -100,14 +102,14 @@ async function processOrderPaid(shopDomain: string, payload: any, session: any) 
   // Get locations for inventory adjustment
   let locations: Array<{ id: string; name: string }> = [];
   try {
-    locations = await getLocations(admin);
+    locations = await getLocations(admin as any);
   } catch (error) {
-    console.error(`Failed to get locations for ${shopDomain}:`, error);
+    console.log(`[Error] Failed to get locations for ${shopDomain}:`, error);
     return;
   }
 
   if (locations.length === 0) {
-    console.error(`No locations found for ${shopDomain}`);
+    console.log(`[Error] No locations found for ${shopDomain}`);
     return;
   }
 
