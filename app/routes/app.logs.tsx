@@ -158,7 +158,7 @@ export default function SyncLogsPage() {
       </IndexTable.Cell>
       <IndexTable.Cell>
         <Text as="span" alignment="center">
-          {log.quantitySold}
+          {log.orderName.includes("Up-Sync") ? "-" : log.quantitySold}
         </Text>
       </IndexTable.Cell>
       <IndexTable.Cell>
@@ -167,9 +167,15 @@ export default function SyncLogsPage() {
         </Text>
       </IndexTable.Cell>
       <IndexTable.Cell>
-        <Text as="span" fontWeight="bold" tone="critical">
-          -{log.totalAdjustment}
-        </Text>
+        {log.orderName.includes("Up-Sync") ? (
+          <Text as="span" fontWeight="bold" tone="success">
+            = {log.totalAdjustment}
+          </Text>
+        ) : (
+          <Text as="span" fontWeight="bold" tone="critical">
+            -{log.totalAdjustment}
+          </Text>
+        )}
       </IndexTable.Cell>
       <IndexTable.Cell>{statusBadge(log.status)}</IndexTable.Cell>
     </IndexTable.Row>
