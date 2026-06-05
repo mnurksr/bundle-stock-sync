@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { useLoaderData, useActionData, useFetcher } from "@remix-run/react";
+import { useLoaderData, useActionData, useFetcher, Form, useNavigation } from "@remix-run/react";
 import {
   Page,
   Layout,
@@ -116,6 +116,7 @@ export default function SettingsPage() {
     useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const fetcher = useFetcher();
+  const nav = useNavigation();
   const shopify = useAppBridge();
 
   const isFree = shop.plan === "free";
@@ -263,16 +264,16 @@ export default function SettingsPage() {
                       {!isFree ? (
                         <Badge tone="success">Current plan</Badge>
                       ) : (
-                        <fetcher.Form method="POST">
+                        <Form method="POST">
                           <input type="hidden" name="intent" value="upgrade" />
                           <Button
                             variant="primary"
                             submit
-                            loading={fetcher.state === "submitting"}
+                            loading={nav.state === "submitting" && nav.formData?.get("intent") === "upgrade"}
                           >
                             Upgrade to Pro — $3/mo
                           </Button>
-                        </fetcher.Form>
+                        </Form>
                       )}
                     </BlockStack>
                   </Box>
@@ -298,17 +299,17 @@ export default function SettingsPage() {
                       Perfect for stores with high order volume or multiple
                       bundle products.
                     </Text>
-                    <fetcher.Form method="POST">
+                    <Form method="POST">
                       <input type="hidden" name="intent" value="upgrade" />
                       <Button
                         variant="primary"
                         fullWidth
                         submit
-                        loading={fetcher.state === "submitting"}
+                        loading={nav.state === "submitting" && nav.formData?.get("intent") === "upgrade"}
                       >
                         Upgrade Now
                       </Button>
-                    </fetcher.Form>
+                    </Form>
                   </BlockStack>
                 </Card>
               )}
