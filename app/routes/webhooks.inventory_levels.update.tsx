@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { createSyncLog } from "../services/syncLog.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { payload, session, admin } = await authenticate.webhook(request);
@@ -130,8 +131,31 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       
       if (setStockData.data?.inventorySetQuantities?.userErrors?.length > 0) {
         console.error("Failed to sync up bundle stock:", setStockData.data.inventorySetQuantities.userErrors);
+        
+        await createSyncLog({
+          shopId: shop.id,
+          orderId: `inventory-${payload.updated_at || Date.now()}`,
+          orderName: "Up-Sync Error",
+          bundleRuleId: rule.id,
+          syncType: "up",
+          status: "failed",
+          details: `Error setting bundle stock: ${JSON.stringify(setStockData.data.inventorySetQuantities.userErrors)}`,
+          idempotencyKey: `up-sync-${rule.id}-${payload.updated_at || Date.now()}`
+        });
+
       } else {
         console.log(`Successfully synced UP bundle stock for rule ${rule.id} to ${newBundleStock} (Available)`);
+        
+        await createSyncLog({
+          shopId: shop.id,
+          orderId: `inventory-${payload.updated_at || Date.now()}`,
+          orderName: "Auto Up-Sync",
+          bundleRuleId: rule.id,
+          syncType: "up",
+          status: "success",
+          details: `Single product stock changed to ${newAvailableCount}. Auto-calculated and set bundle stock to ${newBundleStock}.`,
+          idempotencyKey: `up-sync-${rule.id}-${payload.updated_at || Date.now()}`
+        });
       }
     } catch (error) {
       console.error(`Error processing up-sync for rule ${rule.id}:`, error);
