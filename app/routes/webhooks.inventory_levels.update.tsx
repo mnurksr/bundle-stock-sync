@@ -94,11 +94,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       if (!bundleInventoryItemId) continue;
 
-      // SET the absolute stock for the bundle product at the same location
+      // SET the absolute stock for the bundle product at the same location targeting "available" directly
       const setStockResponse = await admin.graphql(
         `#graphql
-        mutation inventorySetOnHandQuantities($input: InventorySetOnHandQuantitiesInput!) {
-          inventorySetOnHandQuantities(input: $input) {
+        mutation inventorySetQuantities($input: InventorySetQuantitiesInput!) {
+          inventorySetQuantities(input: $input) {
             inventoryAdjustmentGroup {
               createdAt
             }
@@ -111,8 +111,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         {
           variables: {
             input: {
+              name: "available",
               reason: "correction",
-              setQuantities: [
+              quantities: [
                 {
                   inventoryItemId: bundleInventoryItemId,
                   locationId: gidLocationId,
@@ -126,10 +127,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       const setStockData = await setStockResponse.json();
       
-      if (setStockData.data?.inventorySetOnHandQuantities?.userErrors?.length > 0) {
-        console.error("Failed to sync up bundle stock:", setStockData.data.inventorySetOnHandQuantities.userErrors);
+      if (setStockData.data?.inventorySetQuantities?.userErrors?.length > 0) {
+        console.error("Failed to sync up bundle stock:", setStockData.data.inventorySetQuantities.userErrors);
       } else {
-        console.log(`Successfully synced UP bundle stock for rule ${rule.id} to ${newBundleStock}`);
+        console.log(`Successfully synced UP bundle stock for rule ${rule.id} to ${newBundleStock} (Available)`);
       }
     } catch (error) {
       console.error(`Error processing up-sync for rule ${rule.id}:`, error);
