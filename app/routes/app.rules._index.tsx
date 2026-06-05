@@ -18,6 +18,7 @@ import {
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { useTranslation } from "../utils/i18n";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -87,6 +88,7 @@ export default function BundleRulesPage() {
   const { rules } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteRuleId, setDeleteRuleId] = useState<string | null>(null);
 
@@ -152,9 +154,9 @@ export default function BundleRulesPage() {
       </IndexTable.Cell>
       <IndexTable.Cell>
         {rule.isActive ? (
-          <Badge tone="success">Active</Badge>
+          <Badge tone="success">{t("rules_active")}</Badge>
         ) : (
-          <Badge tone="new">Inactive</Badge>
+          <Badge tone="new">{t("rules_inactive")}</Badge>
         )}
       </IndexTable.Cell>
       <IndexTable.Cell>
@@ -163,14 +165,14 @@ export default function BundleRulesPage() {
             size="slim"
             onClick={() => handleToggle(rule.id)}
           >
-            {rule.isActive ? "Pause" : "Activate"}
+            {rule.isActive ? t("rules_pause") : t("rules_activate")}
           </Button>
           <Button
             size="slim"
             tone="critical"
             onClick={() => handleDelete(rule.id)}
           >
-            Delete
+            {t("rules_btn_delete")}
           </Button>
         </InlineStack>
       </IndexTable.Cell>
@@ -179,9 +181,9 @@ export default function BundleRulesPage() {
 
   return (
     <Page>
-      <TitleBar title="Bundle Rules">
+      <TitleBar title={t("rules_title")}>
         <button variant="primary" onClick={() => navigate("/app/rules/new")}>
-          Add Rule
+          {t("rules_add")}
         </button>
       </TitleBar>
 
@@ -193,11 +195,11 @@ export default function BundleRulesPage() {
                 resourceName={{ singular: "rule", plural: "rules" }}
                 itemCount={rules.length}
                 headings={[
-                  { title: "Bundle Product" },
-                  { title: "Base Product" },
-                  { title: "Multiplier" },
-                  { title: "Status" },
-                  { title: "Actions" },
+                  { title: t("rules_col_bundle") },
+                  { title: t("rules_col_base") },
+                  { title: t("rules_col_multiplier") },
+                  { title: t("rules_col_status") },
+                  { title: t("rules_col_actions") },
                 ]}
                 selectable={false}
               >
@@ -207,17 +209,15 @@ export default function BundleRulesPage() {
           ) : (
             <Card>
               <EmptyState
-                heading="Create your first bundle rule"
+                heading={t("rules_empty_title")}
                 action={{
-                  content: "Add Rule",
+                  content: t("rules_add"),
                   url: "/app/rules/new",
                 }}
                 image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
               >
                 <p>
-                  Link a multipack/bundle product to its base product. When the
-                  bundle sells, inventory on the base product will be
-                  automatically adjusted.
+                  {t("rules_empty_desc")}
                 </p>
               </EmptyState>
             </Card>
@@ -228,24 +228,22 @@ export default function BundleRulesPage() {
       <Modal
         open={deleteModalOpen}
         onClose={() => setDeleteModalOpen(false)}
-        title="Delete bundle rule?"
+        title={t("rules_modal_delete_title")}
         primaryAction={{
-          content: "Delete",
+          content: t("rules_btn_delete"),
           destructive: true,
           onAction: confirmDelete,
         }}
         secondaryActions={[
           {
-            content: "Cancel",
+            content: t("rules_btn_cancel"),
             onAction: () => setDeleteModalOpen(false),
           },
         ]}
       >
         <Modal.Section>
           <Text as="p">
-            This will permanently remove this bundle rule. Future orders with
-            this bundle product will no longer trigger automatic inventory
-            adjustments. Existing sync logs will be preserved.
+            {t("rules_modal_delete_desc")}
           </Text>
         </Modal.Section>
       </Modal>

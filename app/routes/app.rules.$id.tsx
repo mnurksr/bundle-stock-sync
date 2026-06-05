@@ -25,6 +25,7 @@ import {
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { useTranslation } from "../utils/i18n";
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -114,6 +115,7 @@ export default function EditBundleRulePage() {
   const submit = useSubmit();
   const navigate = useNavigate();
   const shopify = useAppBridge();
+  const { t } = useTranslation();
 
   const [multiplier, setMultiplier] = useState(String(rule.multiplier));
   const [isActive, setIsActive] = useState(rule.isActive);
@@ -128,8 +130,8 @@ export default function EditBundleRulePage() {
     formData.append("isActive", String(isActive));
     submit(formData, { method: "POST" });
     setIsSaving(false);
-    shopify.toast.show("Rule updated");
-  }, [multiplier, isActive, submit, shopify]);
+    shopify.toast.show(t("rules_edit_toast"));
+  }, [multiplier, isActive, submit, shopify, t]);
 
   const handleDelete = useCallback(() => {
     const formData = new FormData();
@@ -148,12 +150,12 @@ export default function EditBundleRulePage() {
 
   return (
     <Page
-      backAction={{ content: "Bundle Rules", url: "/app/rules" }}
-      title={`Edit: ${rule.bundleProductTitle}`}
+      backAction={{ content: t("rules_title"), url: "/app/rules" }}
+      title={rule.bundleProductTitle}
     >
-      <TitleBar title="Edit Bundle Rule">
+      <TitleBar title={t("rules_edit_title")}>
         <button variant="primary" onClick={handleSave} disabled={isSaving}>
-          Save
+          {t("rules_btn_save")}
         </button>
       </TitleBar>
 
@@ -178,9 +180,9 @@ export default function EditBundleRulePage() {
                 <BlockStack gap="300">
                   <InlineStack align="space-between">
                     <Text as="h2" variant="headingMd">
-                      📦 Bundle Product
+                      {t("rules_new_bundle_title")}
                     </Text>
-                    <Badge tone="info">Read-only</Badge>
+                    <Badge tone="info">{t("rules_edit_readonly")}</Badge>
                   </InlineStack>
                   <Box
                     padding="300"
@@ -209,9 +211,9 @@ export default function EditBundleRulePage() {
                 <BlockStack gap="300">
                   <InlineStack align="space-between">
                     <Text as="h2" variant="headingMd">
-                      🏷️ Base Product
+                      {t("rules_new_base_title")}
                     </Text>
-                    <Badge tone="info">Read-only</Badge>
+                    <Badge tone="info">{t("rules_edit_readonly")}</Badge>
                   </InlineStack>
                   <Box
                     padding="300"
@@ -239,16 +241,16 @@ export default function EditBundleRulePage() {
               <Card>
                 <BlockStack gap="400">
                   <Text as="h2" variant="headingMd">
-                    ✖️ Multiplier
+                    {t("rules_new_multi_title")}
                   </Text>
                   <TextField
-                    label="Units per bundle"
+                    label={t("rules_new_multi_label")}
                     type="number"
                     value={multiplier}
                     onChange={setMultiplier}
                     min={1}
                     autoComplete="off"
-                    helpText="How many base product units are deducted per bundle sold."
+                    helpText={t("rules_new_multi_help")}
                   />
                 </BlockStack>
               </Card>
@@ -259,19 +261,19 @@ export default function EditBundleRulePage() {
                   <InlineStack align="space-between" blockAlign="center">
                     <BlockStack gap="100">
                       <Text as="h2" variant="headingMd">
-                        Rule Status
+                        {t("rules_edit_status_title")}
                       </Text>
                       <Text as="p" variant="bodySm" tone="subdued">
                         {isActive
-                          ? "This rule is actively syncing inventory."
-                          : "This rule is paused. No inventory adjustments will be made."}
+                          ? t("rules_edit_status_active")
+                          : t("rules_edit_status_inactive")}
                       </Text>
                     </BlockStack>
                     <Button
                       onClick={() => setIsActive(!isActive)}
                       variant={isActive ? "primary" : "secondary"}
                     >
-                      {isActive ? "Active ✓" : "Inactive"}
+                      {isActive ? t("rules_active") + " ✓" : t("rules_inactive")}
                     </Button>
                   </InlineStack>
                 </BlockStack>
@@ -285,18 +287,18 @@ export default function EditBundleRulePage() {
               <Card>
                 <BlockStack gap="300">
                   <Text as="h2" variant="headingMd">
-                    Rule Info
+                    {t("rules_edit_info")}
                   </Text>
                   <Divider />
                   <InlineStack align="space-between">
                     <Text as="span" tone="subdued">
-                      Created
+                      {t("rules_edit_created")}
                     </Text>
                     <Text as="span">{formatDate(rule.createdAt)}</Text>
                   </InlineStack>
                   <InlineStack align="space-between">
                     <Text as="span" tone="subdued">
-                      Total syncs
+                      {t("rules_edit_total_syncs")}
                     </Text>
                     <Text as="span" fontWeight="bold">
                       {syncCount}
@@ -304,12 +306,12 @@ export default function EditBundleRulePage() {
                   </InlineStack>
                   <InlineStack align="space-between">
                     <Text as="span" tone="subdued">
-                      Status
+                      {t("rules_col_status")}
                     </Text>
                     {isActive ? (
-                      <Badge tone="success">Active</Badge>
+                      <Badge tone="success">{t("rules_active")}</Badge>
                     ) : (
-                      <Badge tone="new">Inactive</Badge>
+                      <Badge tone="new">{t("rules_inactive")}</Badge>
                     )}
                   </InlineStack>
                 </BlockStack>
@@ -319,19 +321,17 @@ export default function EditBundleRulePage() {
               <Card>
                 <BlockStack gap="300">
                   <Text as="h2" variant="headingMd" tone="critical">
-                    Danger Zone
+                    {t("rules_edit_danger")}
                   </Text>
                   <Text as="p" variant="bodySm" tone="subdued">
-                    Deleting this rule is permanent. Existing sync logs will be
-                    preserved but future orders will not trigger inventory
-                    adjustments.
+                    {t("rules_edit_danger_desc")}
                   </Text>
                   <Button
                     tone="critical"
                     variant="primary"
                     onClick={() => setDeleteModalOpen(true)}
                   >
-                    Delete Rule
+                    {t("rules_btn_delete")}
                   </Button>
                 </BlockStack>
               </Card>
@@ -343,15 +343,15 @@ export default function EditBundleRulePage() {
       <Modal
         open={deleteModalOpen}
         onClose={() => setDeleteModalOpen(false)}
-        title="Delete this bundle rule?"
+        title={t("rules_modal_delete_title")}
         primaryAction={{
-          content: "Delete permanently",
+          content: t("rules_edit_delete_permanently"),
           destructive: true,
           onAction: handleDelete,
         }}
         secondaryActions={[
           {
-            content: "Cancel",
+            content: t("rules_btn_cancel"),
             onAction: () => setDeleteModalOpen(false),
           },
         ]}
@@ -359,12 +359,10 @@ export default function EditBundleRulePage() {
         <Modal.Section>
           <BlockStack gap="300">
             <Text as="p">
-              Are you sure you want to delete the rule for{" "}
-              <strong>{rule.bundleProductTitle}</strong>?
+              {t("rules_edit_delete_sure", { product: rule.bundleProductTitle })}
             </Text>
             <Text as="p" tone="subdued">
-              This action cannot be undone. Existing sync logs ({syncCount}{" "}
-              records) will be preserved.
+              {t("rules_edit_delete_undone", { count: syncCount })}
             </Text>
           </BlockStack>
         </Modal.Section>

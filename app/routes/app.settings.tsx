@@ -19,6 +19,7 @@ import {
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate, MONTHLY_PLAN } from "../shopify.server";
 import db from "../db.server";
+import { useTranslation } from "../utils/i18n";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, billing } = await authenticate.admin(request);
@@ -103,8 +104,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         // Shopify throws a Response to redirect the user to the billing approval page
         throw error;
       }
+      // Note: We cannot easily use t() here since this is in the server action. 
+      // We will leave the fallback message in English or pass a key.
+      // Let's pass the error key and we can translate it in the component if needed.
       return { 
-        error: `Billing Error: Something went wrong. Please try again or contact support at support@bundlemanager.app` 
+        error: "settings_billing_error" 
       };
     }
   }
@@ -119,6 +123,7 @@ export default function SettingsPage() {
   const fetcher = useFetcher();
   const nav = useNavigation();
   const shopify = useAppBridge();
+  const { t } = useTranslation();
 
   const isFree = shop.plan === "free";
   const quotaUsagePercent = isFree
@@ -140,7 +145,7 @@ export default function SettingsPage() {
       <BlockStack gap="500">
         {"error" in (actionData || {}) && (
           <Banner title="Error" tone="critical">
-            <p>{(actionData as any).error}</p>
+            <p>{(actionData as any).error === "settings_billing_error" ? t("settings_billing_error") : (actionData as any).error}</p>
           </Banner>
         )}
 
@@ -152,12 +157,12 @@ export default function SettingsPage() {
                 <BlockStack gap="400">
                   <InlineStack align="space-between" blockAlign="center">
                     <Text as="h2" variant="headingMd">
-                      Current Plan
+                      {t("settings_plan")}
                     </Text>
                     {isFree ? (
-                      <Badge>Free</Badge>
+                      <Badge>{t("settings_plan_free")}</Badge>
                     ) : (
-                      <Badge tone="success">Pro — $3/mo</Badge>
+                      <Badge tone="success">{t("settings_plan_pro")}</Badge>
                     )}
                   </InlineStack>
 
@@ -165,11 +170,11 @@ export default function SettingsPage() {
 
                   <InlineStack align="space-between">
                     <Text as="span" tone="subdued">
-                      Monthly syncs used
+                      {t("settings_plan_monthly_syncs")}
                     </Text>
                     <Text as="span" fontWeight="bold">
                       {monthlySyncs}
-                      {isFree ? ` / ${quotaLimit}` : " (unlimited)"}
+                      {isFree ? ` / ${quotaLimit}` : t("settings_plan_unlimited")}
                     </Text>
                   </InlineStack>
                   {isFree && (
@@ -182,14 +187,14 @@ export default function SettingsPage() {
 
                   <InlineStack align="space-between">
                     <Text as="span" tone="subdued">
-                      Active bundle rules
+                      {t("settings_plan_active_rules")}
                     </Text>
                     <Text as="span">{totalRules}</Text>
                   </InlineStack>
 
                   <InlineStack align="space-between">
                     <Text as="span" tone="subdued">
-                      Installed since
+                      {t("settings_plan_installed")}
                     </Text>
                     <Text as="span">{formatDate(shop.installedAt)}</Text>
                   </InlineStack>
@@ -200,7 +205,7 @@ export default function SettingsPage() {
               <Card>
                 <BlockStack gap="400">
                   <Text as="h2" variant="headingMd">
-                    Plan Comparison
+                    {t("settings_compare_title")}
                   </Text>
 
                   <Divider />
@@ -216,20 +221,20 @@ export default function SettingsPage() {
                     <BlockStack gap="300">
                       <InlineStack align="space-between" blockAlign="center">
                         <Text as="h3" variant="headingSm">
-                          Free Plan
+                          {t("settings_free")}
                         </Text>
                         <Text as="span" variant="headingMd">
                           $0
                         </Text>
                       </InlineStack>
                       <List>
-                        <List.Item>50 inventory syncs per month</List.Item>
-                        <List.Item>Unlimited bundle rules</List.Item>
-                        <List.Item>Basic sync logs</List.Item>
-                        <List.Item>Email support</List.Item>
+                        <List.Item>{t("settings_compare_free_1")}</List.Item>
+                        <List.Item>{t("settings_compare_free_2")}</List.Item>
+                        <List.Item>{t("settings_compare_free_3")}</List.Item>
+                        <List.Item>{t("settings_compare_free_4")}</List.Item>
                       </List>
                       {isFree && (
-                        <Badge tone="info">Current plan</Badge>
+                        <Badge tone="info">{t("settings_compare_current")}</Badge>
                       )}
                     </BlockStack>
                   </Box>
@@ -253,17 +258,17 @@ export default function SettingsPage() {
                       </InlineStack>
                       <List>
                         <List.Item>
-                          <strong>Unlimited</strong> inventory syncs
+                          {t("settings_compare_pro_1")}
                         </List.Item>
-                        <List.Item>Unlimited bundle rules</List.Item>
-                        <List.Item>Full sync history & logs</List.Item>
-                        <List.Item>Priority support</List.Item>
+                        <List.Item>{t("settings_compare_pro_2")}</List.Item>
+                        <List.Item>{t("settings_compare_pro_3")}</List.Item>
+                        <List.Item>{t("settings_compare_pro_4")}</List.Item>
                         <List.Item>
-                          No surprises — flat monthly price
+                          {t("settings_compare_pro_5")}
                         </List.Item>
                       </List>
                       {!isFree ? (
-                        <Badge tone="success">Current plan</Badge>
+                        <Badge tone="success">{t("settings_compare_current")}</Badge>
                       ) : (
                         <Form method="POST">
                           <input type="hidden" name="intent" value="upgrade" />
@@ -272,7 +277,7 @@ export default function SettingsPage() {
                             submit
                             loading={nav.state === "submitting" && nav.formData?.get("intent") === "upgrade"}
                           >
-                            Upgrade to Pro — $3/mo
+                            {t("settings_upgrade_btn")}
                           </Button>
                         </Form>
                       )}
@@ -290,15 +295,13 @@ export default function SettingsPage() {
                 <Card>
                   <BlockStack gap="300">
                     <Text as="h2" variant="headingMd">
-                      🚀 Upgrade to Pro
+                      {t("settings_upgrade_title")}
                     </Text>
                     <Text as="p" variant="bodyMd">
-                      Never worry about sync limits. Get unlimited inventory
-                      syncs for just <strong>$3/month</strong>.
+                      {t("settings_upgrade_desc1")}
                     </Text>
                     <Text as="p" variant="bodySm" tone="subdued">
-                      Perfect for stores with high order volume or multiple
-                      bundle products.
+                      {t("settings_upgrade_desc2")}
                     </Text>
                     <Form method="POST">
                       <input type="hidden" name="intent" value="upgrade" />
@@ -308,7 +311,7 @@ export default function SettingsPage() {
                         submit
                         loading={nav.state === "submitting" && nav.formData?.get("intent") === "upgrade"}
                       >
-                        Upgrade Now
+                        {t("settings_upgrade_now")}
                       </Button>
                     </Form>
                   </BlockStack>
@@ -319,24 +322,24 @@ export default function SettingsPage() {
               <Card>
                 <BlockStack gap="300">
                   <Text as="h2" variant="headingMd">
-                    About
+                    {t("settings_about_title")}
                   </Text>
                   <Divider />
                   <InlineStack align="space-between">
                     <Text as="span" tone="subdued">
-                      App
+                      {t("settings_about_app")}
                     </Text>
                     <Text as="span">Bundle Stock Sync</Text>
                   </InlineStack>
                   <InlineStack align="space-between">
                     <Text as="span" tone="subdued">
-                      Version
+                      {t("settings_about_version")}
                     </Text>
                     <Text as="span">1.0.0</Text>
                   </InlineStack>
                   <InlineStack align="space-between">
                     <Text as="span" tone="subdued">
-                      API Version
+                      {t("settings_about_api")}
                     </Text>
                     <Text as="span">2026-04</Text>
                   </InlineStack>
@@ -347,15 +350,14 @@ export default function SettingsPage() {
               <Card>
                 <BlockStack gap="300">
                   <Text as="h2" variant="headingMd">
-                    Need Help?
+                    {t("settings_help_title")}
                   </Text>
                   <Text as="p" variant="bodySm" tone="subdued">
-                    If you encounter any issues or have feature requests,
-                    please reach out to our support team.
+                    {t("settings_help_desc")}
                   </Text>
                   <a href="mailto:mnurksr@gmail.com" target="_top" style={{ textDecoration: 'none' }}>
                     <Button>
-                      Contact Support
+                      {t("settings_help_btn")}
                     </Button>
                   </a>
                 </BlockStack>

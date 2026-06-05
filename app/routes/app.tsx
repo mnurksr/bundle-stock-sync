@@ -7,12 +7,20 @@ import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { LanguageProvider, useTranslation } from "../utils/i18n";
 
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   
+  // Extract locale from request URL (Shopify passes it like ?locale=tr-TR or just tr)
+  const url = new URL(request.url);
+  const rawLocale = url.searchParams.get("locale") || "en";
+  const localePrefix = rawLocale.split("-")[0].toLowerCase() as any; // e.g., 'tr'
+  const supportedLocales = ["en", "tr", "de", "fr", "es"];
+  const locale = supportedLocales.includes(localePrefix) ? localePrefix : "en";
+
   // Ensure shop is active on ANY app page load
   const shopDomain = session.shop;
   let shop = await db.shop.findUnique({ where: { shopDomain } });
@@ -22,24 +30,33 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     await db.shop.update({ where: { shopDomain }, data: { isActive: true } });
   }
 
-  return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+  return { apiKey: process.env.SHOPIFY_API_KEY || "", locale };
 };
 
+function NavMenuTranslated() {
+  const { t } = useTranslation();
+  return (
+    <NavMenu>
+      <Link to="/app" rel="home">
+        {t("nav_dashboard")}
+      </Link>
+      <Link to="/app/rules">{t("nav_rules")}</Link>
+      <Link to="/app/logs">{t("nav_logs")}</Link>
+      <Link to="/app/settings">{t("nav_settings")}</Link>
+    </NavMenu>
+  );
+}
+
 export default function App() {
-  const { apiKey } = useLoaderData<typeof loader>();
+  const { apiKey, locale } = useLoaderData<typeof loader>();
 
   return (
-    <AppProvider isEmbeddedApp apiKey={apiKey}>
-      <NavMenu>
-        <Link to="/app" rel="home">
-          Dashboard
-        </Link>
-        <Link to="/app/rules">Bundle Rules</Link>
-        <Link to="/app/logs">Sync Logs</Link>
-        <Link to="/app/settings">Settings</Link>
-      </NavMenu>
-      <Outlet />
-    </AppProvider>
+    <LanguageProvider locale={locale}>
+      <AppProvider isEmbeddedApp apiKey={apiKey}>
+        <NavMenuTranslated />
+        <Outlet />
+      </AppProvider>
+    </LanguageProvider>
   );
 }
 

@@ -18,6 +18,7 @@ import {
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { useTranslation } from "../utils/i18n";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -103,6 +104,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export default function Dashboard() {
   const { shop, stats, recentLogs, quotaLimit } =
     useLoaderData<typeof loader>();
+  const { t } = useTranslation();
   const isFree = shop.plan === "free";
   const quotaUsagePercent = isFree
     ? Math.round((stats.monthlySuccessSyncs / quotaLimit) * 100)
@@ -112,13 +114,13 @@ export default function Dashboard() {
   const statusBadge = (status: string) => {
     switch (status) {
       case "success":
-        return <Badge tone="success">Success</Badge>;
+        return <Badge tone="success">{t("status_success")}</Badge>;
       case "failed":
-        return <Badge tone="critical">Failed</Badge>;
+        return <Badge tone="critical">{t("status_failed")}</Badge>;
       case "skipped":
-        return <Badge tone="warning">Skipped</Badge>;
+        return <Badge tone="warning">{t("status_skipped")}</Badge>;
       case "pending":
-        return <Badge tone="info">Pending</Badge>;
+        return <Badge tone="info">{t("status_pending")}</Badge>;
       default:
         return <Badge>{status}</Badge>;
     }
@@ -164,22 +166,20 @@ export default function Dashboard() {
 
   return (
     <Page>
-      <TitleBar title="Bundle Stock Sync" />
+      <TitleBar title={t("dash_title")} />
       <BlockStack gap="500">
         {/* Welcome banner for new users */}
         {stats.totalRulesCount === 0 && (
           <Banner
-            title="Welcome to Bundle Stock Sync!"
+            title={t("dash_welcome_title")}
             tone="info"
             action={{
-              content: "Create your first rule",
+              content: t("dash_create_rule"),
               url: "/app/rules/new",
             }}
           >
             <p>
-              Start by creating a bundle rule to link your multipack products
-              with their base products. The app will automatically sync
-              inventory when bundles are sold.
+              {t("dash_welcome_desc")}
             </p>
           </Banner>
         )}
@@ -187,16 +187,15 @@ export default function Dashboard() {
         {/* Quota warning */}
         {isQuotaWarning && (
           <Banner
-            title="Approaching sync limit"
+            title={t("dash_quota_warning_title")}
             tone="warning"
             action={{
-              content: "Upgrade to Pro ($3/mo)",
+              content: t("dash_upgrade"),
               url: "/app/settings",
             }}
           >
             <p>
-              You've used {stats.monthlySuccessSyncs} of {quotaLimit} free
-              monthly syncs. Upgrade to Pro for unlimited syncs.
+              {t("dash_quota_warning_desc", { current: stats.monthlySuccessSyncs, limit: quotaLimit })}
             </p>
           </Banner>
         )}
@@ -207,13 +206,13 @@ export default function Dashboard() {
             <Card>
               <BlockStack gap="200">
                 <Text as="h2" variant="headingSm" tone="subdued">
-                  Active Rules
+                  {t("dash_active_rules")}
                 </Text>
                 <Text as="p" variant="headingXl">
                   {stats.activeRulesCount}
                 </Text>
                 <Text as="p" variant="bodySm" tone="subdued">
-                  {stats.totalRulesCount} total rules configured
+                  {t("dash_total_rules", { count: stats.totalRulesCount })}
                 </Text>
               </BlockStack>
             </Card>
@@ -222,7 +221,7 @@ export default function Dashboard() {
             <Card>
               <BlockStack gap="200">
                 <Text as="h2" variant="headingSm" tone="subdued">
-                  Monthly Syncs
+                  {t("dash_monthly_syncs")}
                 </Text>
                 <Text as="p" variant="headingXl">
                   {stats.monthlySuccessSyncs}
@@ -253,13 +252,13 @@ export default function Dashboard() {
             <Card>
               <BlockStack gap="200">
                 <Text as="h2" variant="headingSm" tone="subdued">
-                  Success Rate
+                  {t("dash_success_rate")}
                 </Text>
                 <Text as="p" variant="headingXl">
                   {stats.successRate}%
                 </Text>
                 <Text as="p" variant="bodySm" tone="subdued">
-                  {stats.successfulSyncs} succeeded, {stats.failedSyncs} failed
+                  {t("dash_success_failed", { success: stats.successfulSyncs, failed: stats.failedSyncs })}
                 </Text>
               </BlockStack>
             </Card>
@@ -271,14 +270,14 @@ export default function Dashboard() {
           <BlockStack gap="400">
             <InlineStack align="space-between">
               <Text as="h2" variant="headingMd">
-                Recent Sync Activity
+                {t("dash_recent_activity")}
               </Text>
               {recentLogs.length > 0 && (
                 <RemixLink
                   to="/app/logs"
                   style={{ textDecoration: "none", color: "var(--p-color-text-link)" }}
                 >
-                  View all logs →
+                  {t("dash_view_all")}
                 </RemixLink>
               )}
             </InlineStack>
@@ -288,13 +287,13 @@ export default function Dashboard() {
                 resourceName={{ singular: "sync", plural: "syncs" }}
                 itemCount={recentLogs.length}
                 headings={[
-                  { title: "Date" },
-                  { title: "Order" },
-                  { title: "Bundle Product" },
-                  { title: "Base Product" },
-                  { title: "Qty" },
-                  { title: "Adjustment" },
-                  { title: "Status" },
+                  { title: t("dash_col_date") },
+                  { title: t("dash_col_order") },
+                  { title: t("dash_col_bundle") },
+                  { title: t("dash_col_base") },
+                  { title: t("dash_col_qty") },
+                  { title: t("dash_col_adj") },
+                  { title: t("dash_col_status") },
                 ]}
                 selectable={false}
               >
@@ -302,12 +301,11 @@ export default function Dashboard() {
               </IndexTable>
             ) : (
               <EmptyState
-                heading="No sync activity yet"
+                heading={t("dash_empty_logs")}
                 image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
               >
                 <p>
-                  Sync logs will appear here once orders with bundle products
-                  are placed in your store.
+                  {t("dash_empty_logs_desc")}
                 </p>
               </EmptyState>
             )}

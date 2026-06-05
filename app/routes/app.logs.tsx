@@ -18,6 +18,7 @@ import {
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { useTranslation } from "../utils/i18n";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -96,9 +97,10 @@ export default function SyncLogsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const submit = useSubmit();
+  const { t } = useTranslation();
 
   const handleClearLogs = () => {
-    if (confirm("Are you sure you want to delete all sync logs? This cannot be undone.")) {
+    if (confirm(t("logs_clear_confirm"))) {
       submit({ action: "clearLogs" }, { method: "post" });
     }
   };
@@ -125,13 +127,13 @@ export default function SyncLogsPage() {
   const statusBadge = (status: string) => {
     switch (status) {
       case "success":
-        return <Badge tone="success">Success</Badge>;
+        return <Badge tone="success">{t("status_success")}</Badge>;
       case "failed":
-        return <Badge tone="critical">Failed</Badge>;
+        return <Badge tone="critical">{t("status_failed")}</Badge>;
       case "skipped":
-        return <Badge tone="warning">Skipped</Badge>;
+        return <Badge tone="warning">{t("status_skipped")}</Badge>;
       case "pending":
-        return <Badge tone="info">Pending</Badge>;
+        return <Badge tone="info">{t("status_pending")}</Badge>;
       default:
         return <Badge>{status}</Badge>;
     }
@@ -149,25 +151,25 @@ export default function SyncLogsPage() {
   };
 
   const statusOptions = [
-    { label: "All statuses", value: "all" },
-    { label: "Success", value: "success" },
-    { label: "Failed", value: "failed" },
-    { label: "Skipped", value: "skipped" },
-    { label: "Pending", value: "pending" },
+    { label: t("logs_status_all"), value: "all" },
+    { label: t("logs_status_success"), value: "success" },
+    { label: t("logs_status_failed"), value: "failed" },
+    { label: t("logs_status_skipped"), value: "skipped" },
+    { label: t("logs_status_pending"), value: "pending" },
   ];
 
   const rowMarkup = logs.map((log, index) => {
     const isUpSync = log.orderName.includes("Up-Sync") || log.orderName === "Base Stock Changed";
     
     // Format Event Name
-    const eventName = isUpSync ? "Base Stock Changed" : `Order ${log.orderName}`;
+    const eventName = isUpSync ? t("logs_event_up_sync") : t("logs_event_order", { orderName: log.orderName });
     
     // Format Action Description
     let actionDescription = "";
     if (isUpSync) {
-      actionDescription = `Bundle set to ${log.totalAdjustment} (Base: ${log.quantitySold})`;
+      actionDescription = t("logs_action_up_sync", { adjustment: log.totalAdjustment, quantity: log.quantitySold });
     } else {
-      actionDescription = `Base -${log.totalAdjustment} (Sold: ${log.quantitySold} Bundle)`;
+      actionDescription = t("logs_action_down_sync", { adjustment: log.totalAdjustment, quantity: log.quantitySold });
     }
 
     return (
@@ -199,9 +201,9 @@ export default function SyncLogsPage() {
 
   return (
     <Page fullWidth>
-      <TitleBar title="Sync Logs">
+      <TitleBar title={t("logs_title")}>
         <button onClick={handleClearLogs}>
-          Clear All Logs
+          {t("logs_clear")}
         </button>
       </TitleBar>
 
@@ -211,7 +213,7 @@ export default function SyncLogsPage() {
           <InlineStack gap="400" align="start" blockAlign="center">
             <Box minWidth="200px">
               <Select
-                label="Filter by status"
+                label={t("logs_filter_status")}
                 labelInline
                 options={statusOptions}
                 value={statusFilter}
@@ -219,7 +221,7 @@ export default function SyncLogsPage() {
               />
             </Box>
             <Text as="span" variant="bodySm" tone="subdued">
-              {total} total log{total !== 1 ? "s" : ""}
+              {total} {t("logs_total")}
             </Text>
           </InlineStack>
         </Card>
@@ -231,11 +233,11 @@ export default function SyncLogsPage() {
               resourceName={{ singular: "sync log", plural: "sync logs" }}
               itemCount={logs.length}
               headings={[
-                { title: "Date/Time" },
-                { title: "Event" },
-                { title: "Rule (Bundle ↔ Base)" },
-                { title: "Action Taken" },
-                { title: "Status" },
+                { title: t("logs_col_date") },
+                { title: t("logs_col_event") },
+                { title: t("logs_col_rule") },
+                { title: t("logs_col_action") },
+                { title: t("logs_col_status") },
               ]}
               selectable={false}
             >
@@ -245,10 +247,10 @@ export default function SyncLogsPage() {
         ) : (
           <Card>
             <EmptyState
-              heading="No sync logs found"
+              heading={t("logs_empty")}
               image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
             >
-              <p>Sync logs will appear here when inventory is synchronized.</p>
+              <p>{t("logs_empty_desc")}</p>
             </EmptyState>
           </Card>
         )}
@@ -269,7 +271,7 @@ export default function SyncLogsPage() {
                 params.set("page", String(page + 1));
                 setSearchParams(params);
               }}
-              label={`Page ${page} of ${totalPages}`}
+              label={t("logs_page", { page, totalPages })}
             />
           </InlineStack>
         )}

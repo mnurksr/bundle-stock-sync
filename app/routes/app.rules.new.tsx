@@ -20,6 +20,7 @@ import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { getInventoryItemId } from "../services/inventory.server";
+import { useTranslation } from "../utils/i18n";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
@@ -149,6 +150,7 @@ export default function NewBundleRulePage() {
   const navigate = useNavigate();
   const shopify = useAppBridge();
   const submit = useSubmit();
+  const { t } = useTranslation();
 
   const [bundleProduct, setBundleProduct] = useState<SelectedProduct | null>(
     null
@@ -237,12 +239,12 @@ export default function NewBundleRulePage() {
 
   return (
     <Page
-      backAction={{ content: "Bundle Rules", url: "/app/rules" }}
-      title="Create Bundle Rule"
+      backAction={{ content: t("rules_title"), url: "/app/rules" }}
+      title={t("rules_new_title")}
     >
-      <TitleBar title="Create Bundle Rule">
+      <TitleBar title={t("rules_new_title")}>
         <button variant="primary" onClick={handleSave} disabled={isSaving}>
-          Save
+          {t("rules_btn_save")}
         </button>
       </TitleBar>
 
@@ -260,11 +262,10 @@ export default function NewBundleRulePage() {
               <Card>
                 <BlockStack gap="400">
                   <Text as="h2" variant="headingMd">
-                    📦 Bundle Product (Multipack)
+                    {t("rules_new_bundle_title")}
                   </Text>
                   <Text as="p" variant="bodySm" tone="subdued">
-                    Select the multipack/bundle product that customers buy (e.g.
-                    "5-Pack Socks")
+                    {t("rules_new_bundle_desc")}
                   </Text>
 
                   {bundleProduct ? (
@@ -291,13 +292,13 @@ export default function NewBundleRulePage() {
                           </Text>
                         </BlockStack>
                         <Button onClick={selectBundleProduct} size="slim">
-                          Change
+                          {t("rules_new_btn_change")}
                         </Button>
                       </InlineStack>
                     </Card>
                   ) : (
                     <Button onClick={selectBundleProduct} variant="secondary" fullWidth>
-                      Select Bundle Product
+                      {t("rules_new_btn_select_bundle")}
                     </Button>
                   )}
                 </BlockStack>
@@ -307,11 +308,10 @@ export default function NewBundleRulePage() {
               <Card>
                 <BlockStack gap="400">
                   <Text as="h2" variant="headingMd">
-                    🏷️ Base Product (Single/Master)
+                    {t("rules_new_base_title")}
                   </Text>
                   <Text as="p" variant="bodySm" tone="subdued">
-                    Select the base product whose inventory should be deducted
-                    (e.g. "Single Sock")
+                    {t("rules_new_base_desc")}
                   </Text>
 
                   {baseProduct ? (
@@ -338,13 +338,13 @@ export default function NewBundleRulePage() {
                           </Text>
                         </BlockStack>
                         <Button onClick={selectBaseProduct} size="slim">
-                          Change
+                          {t("rules_new_btn_change")}
                         </Button>
                       </InlineStack>
                     </Card>
                   ) : (
                     <Button onClick={selectBaseProduct} variant="secondary" fullWidth>
-                      Select Base Product
+                      {t("rules_new_btn_select_base")}
                     </Button>
                   )}
                 </BlockStack>
@@ -354,28 +354,28 @@ export default function NewBundleRulePage() {
               <Card>
                 <BlockStack gap="400">
                   <Text as="h2" variant="headingMd">
-                    ✖️ Multiplier
+                    {t("rules_new_multi_title")}
                   </Text>
                   <TextField
-                    label="How many base product units are in one bundle?"
+                    label={t("rules_new_multi_label")}
                     type="number"
                     value={multiplier}
                     onChange={setMultiplier}
                     min={1}
                     autoComplete="off"
-                    helpText="Example: If selling a 5-pack, set multiplier to 5. When 1 bundle is sold, 5 units will be deducted from the base product's inventory."
+                    helpText={t("rules_new_multi_help")}
                   />
                 </BlockStack>
               </Card>
 
               {/* Oversell Warning */}
               {oversellRisk && (
-                <Banner tone="warning" title="Oversell Risk Detected!">
+                <Banner tone="warning" title={t("rules_new_oversell_title")}>
                   <p>
-                    Your bundle product currently has <strong>{bundleStock}</strong> in stock, but based on your single product's stock ({baseStock}) and multiplier ({parsedMultiplier}), you can realistically only fulfill <strong>{expectedBundleStock}</strong> bundles.
+                    {t("rules_new_oversell_desc1", { bundleStock, baseStock, multiplier: parsedMultiplier, expected: expectedBundleStock })}
                   </p>
                   <p style={{ marginTop: '10px' }}>
-                    Please manually fix the bundle product's inventory in Shopify after creating this rule to prevent overselling.
+                    {t("rules_new_oversell_desc2")}
                   </p>
                 </Banner>
               )}
@@ -386,32 +386,25 @@ export default function NewBundleRulePage() {
             <Card>
               <BlockStack gap="300">
                 <Text as="h2" variant="headingMd">
-                  How it works
+                  {t("rules_new_how_title")}
                 </Text>
                 <List type="number">
                   <List.Item>
-                    Select the <strong>bundle product</strong> (the multipack
-                    customers buy)
+                    {t("rules_new_how_1")}
                   </List.Item>
                   <List.Item>
-                    Select the <strong>base product</strong> (the single item
-                    whose stock should decrease)
+                    {t("rules_new_how_2")}
                   </List.Item>
                   <List.Item>
-                    Set the <strong>multiplier</strong> (how many base units per
-                    bundle)
+                    {t("rules_new_how_3")}
                   </List.Item>
                   <List.Item>
-                    When a customer buys the bundle, the app automatically
-                    deducts <em>quantity × multiplier</em> from the base
-                    product's inventory
+                    {t("rules_new_how_4")}
                   </List.Item>
                 </List>
                 <Banner tone="info">
                   <p>
-                    <strong>Example:</strong> Customer buys 2× "5-Pack Socks".
-                    The app deducts 2 × 5 = <strong>10 units</strong> from
-                    "Single Sock" inventory.
+                    {t("rules_new_how_example")}
                   </p>
                 </Banner>
               </BlockStack>
