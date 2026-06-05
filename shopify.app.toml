@@ -1,39 +1,39 @@
-# Bundle Stock Sync — Shopify Public App Configuration
-# Automatically sync multipack/bundle inventory with base product stock.
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = ""
+client_id = "23ca7c868793747679555ea0ebc24006"
+application_url = "https://bundle.mercsync.com"
+embedded = true
+name = "Bundle Stock Sync"
 
 [access_scopes]
-# Required scopes for inventory sync operations
-scopes = "read_products,read_orders,read_inventory,write_inventory"
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_orders,read_products,write_products,read_inventory,write_inventory"
 
 [webhooks]
-api_version = "2026-04"
+api_version = "2026-07"
 
-  # Core: Inventory sync trigger when an order is paid
   [[webhooks.subscriptions]]
-  topics = ["orders/paid"]
   uri = "/webhooks/orders/paid"
+  topics = [ "orders/paid" ]
 
-  # App lifecycle: Clean up on uninstall
   [[webhooks.subscriptions]]
-  topics = ["app/uninstalled"]
   uri = "/webhooks/app/uninstalled"
+  topics = [ "app/uninstalled" ]
 
-  # App lifecycle: Scope changes
   [[webhooks.subscriptions]]
-  topics = ["app/scopes_update"]
   uri = "/webhooks/app/scopes_update"
-
-  # Mandatory GDPR compliance webhooks (required for App Store)
-  [[webhooks.subscriptions]]
-  uri = "/webhooks"
-  compliance_topics = ["customers/data_request"]
+  topics = [ "app/scopes_update" ]
 
   [[webhooks.subscriptions]]
   uri = "/webhooks"
-  compliance_topics = ["customers/redact"]
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
 
-  [[webhooks.subscriptions]]
-  uri = "/webhooks"
-  compliance_topics = ["shop/redact"]
+[auth]
+redirect_urls = [
+  "https://bundle.mercsync.com/auth/callback",
+  "https://bundle.mercsync.com/auth/shopify/callback",
+  "https://bundle.mercsync.com/api/auth/callback"
+]
+
+[build]
+automatically_update_urls_on_dev = true
