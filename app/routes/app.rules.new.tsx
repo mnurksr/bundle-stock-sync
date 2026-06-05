@@ -53,7 +53,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   // Get inventoryItemId from Shopify API
-  const inventoryItemId = await getInventoryItemId(admin, baseVariantId);
+  let inventoryItemId: string | null = null;
+  try {
+    inventoryItemId = await getInventoryItemId(admin, baseVariantId);
+  } catch (error: any) {
+    console.error("GraphQL Error:", error);
+    return {
+      error: `Shopify API Error: ${error.message || "Failed to fetch inventory item"}`,
+    };
+  }
+
   if (!inventoryItemId) {
     return {
       error:
