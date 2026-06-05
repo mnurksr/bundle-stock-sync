@@ -58,8 +58,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     inventoryItemId = await getInventoryItemId(admin, baseVariantId);
   } catch (error: any) {
     console.error("GraphQL Error:", error);
+    let errorStr = "Unknown error";
+    if (error instanceof Error) {
+      errorStr = error.message;
+    } else if (error && typeof error.status === 'number') {
+      // It's likely a Response object
+      errorStr = `HTTP ${error.status} ${error.statusText}`;
+      try {
+        const text = await (error as Response).clone().text();
+        errorStr += ` - ${text}`;
+      } catch (e) {}
+    } else {
+      try {
+        errorStr = JSON.stringify(error);
+      } catch (e) {}
+    }
+
     return {
-      error: `Shopify API Error: ${error.message || "Failed to fetch inventory item"}`,
+      error: `GraphQL Exception: ${errorStr} (Variant ID: ${baseVariantId})`,
     };
   }
 
