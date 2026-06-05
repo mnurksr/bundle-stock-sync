@@ -165,9 +165,9 @@ export default function SyncLogsPage() {
     // Format Action Description
     let actionDescription = "";
     if (isUpSync) {
-      actionDescription = `Set Bundle to ${log.totalAdjustment} (Because Single Stock is ${log.quantitySold})`;
+      actionDescription = `Bundle Inventory Adjusted to ${log.totalAdjustment} (Based on Location Available: ${log.quantitySold})`;
     } else {
-      actionDescription = `Base -${log.totalAdjustment} (${log.quantitySold} Bundle Sold)`;
+      actionDescription = `Base Inventory Deducted by ${log.totalAdjustment} (Due to ${log.quantitySold} Bundle(s) Sold)`;
     }
 
     return (
