@@ -137,6 +137,7 @@ interface SelectedProduct {
     title: string;
     sku: string;
     displayName: string;
+    inventoryQuantity: number;
   }>;
   images?: Array<{
     originalSrc: string;
@@ -173,6 +174,7 @@ export default function NewBundleRulePage() {
           title: v.title,
           sku: v.sku || "",
           displayName: v.displayName || v.title,
+          inventoryQuantity: v.inventoryQuantity || 0,
         })),
         images: product.images,
       });
@@ -196,6 +198,7 @@ export default function NewBundleRulePage() {
           title: v.title,
           sku: v.sku || "",
           displayName: v.displayName || v.title,
+          inventoryQuantity: v.inventoryQuantity || 0,
         })),
         images: product.images,
       });
@@ -222,6 +225,15 @@ export default function NewBundleRulePage() {
 
     submit(formData, { method: "POST" });
   }, [bundleProduct, baseProduct, multiplier, submit]);
+
+  const bundleVariant = bundleProduct?.variants[0];
+  const baseVariant = baseProduct?.variants[0];
+  const parsedMultiplier = parseInt(multiplier, 10) || 1;
+  const bundleStock = bundleVariant?.inventoryQuantity ?? 0;
+  const baseStock = baseVariant?.inventoryQuantity ?? 0;
+  
+  const expectedBundleStock = Math.floor(baseStock / parsedMultiplier);
+  const oversellRisk = bundleProduct && baseProduct && (bundleStock > expectedBundleStock);
 
   return (
     <Page
@@ -355,6 +367,18 @@ export default function NewBundleRulePage() {
                   />
                 </BlockStack>
               </Card>
+
+              {/* Oversell Warning */}
+              {oversellRisk && (
+                <Banner tone="warning" title="Oversell Risk Detected!">
+                  <p>
+                    Your bundle product currently has <strong>{bundleStock}</strong> in stock, but based on your single product's stock ({baseStock}) and multiplier ({parsedMultiplier}), you can realistically only fulfill <strong>{expectedBundleStock}</strong> bundles.
+                  </p>
+                  <p style={{ marginTop: '10px' }}>
+                    Please manually fix the bundle product's inventory in Shopify after creating this rule to prevent overselling.
+                  </p>
+                </Banner>
+              )}
             </BlockStack>
           </Layout.Section>
 
