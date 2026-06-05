@@ -10,7 +10,7 @@ name = "Bundle Stock Sync"
 scopes = "read_orders,read_products,write_products,read_inventory,write_inventory"
 
 [webhooks]
-api_version = "2026-07"
+api_version = "2025-01"
 
   [[webhooks.subscriptions]]
   uri = "/webhooks/orders/paid"
