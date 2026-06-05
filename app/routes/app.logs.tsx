@@ -165,9 +165,9 @@ export default function SyncLogsPage() {
     // Format Action Description
     let actionDescription = "";
     if (isUpSync) {
-      actionDescription = `Bundle Inventory Adjusted to ${log.totalAdjustment} (Based on Location Available: ${log.quantitySold})`;
+      actionDescription = `Bundle set to ${log.totalAdjustment} (Base: ${log.quantitySold})`;
     } else {
-      actionDescription = `Base Inventory Deducted by ${log.totalAdjustment} (Due to ${log.quantitySold} Bundle(s) Sold)`;
+      actionDescription = `Base -${log.totalAdjustment} (Sold: ${log.quantitySold} Bundle)`;
     }
 
     return (
@@ -198,9 +198,9 @@ export default function SyncLogsPage() {
   });
 
   return (
-    <Page>
+    <Page fullWidth>
       <TitleBar title="Sync Logs">
-        <button variant="primary" tone="critical" onClick={handleClearLogs}>
+        <button onClick={handleClearLogs}>
           Clear All Logs
         </button>
       </TitleBar>
@@ -232,7 +232,7 @@ export default function SyncLogsPage() {
               itemCount={logs.length}
               headings={[
                 { title: "Date/Time" },
-                { title: "Event / Trigger" },
+                { title: "Event" },
                 { title: "Rule (Bundle ↔ Base)" },
                 { title: "Action Taken" },
                 { title: "Status" },
@@ -248,11 +248,7 @@ export default function SyncLogsPage() {
               heading="No sync logs found"
               image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
             >
-              <p>
-                {statusFilter !== "all"
-                  ? `No ${statusFilter} sync logs found. Try changing the filter.`
-                  : "Sync logs will appear here once orders with bundle products are placed."}
-              </p>
+              <p>Sync logs will appear here when inventory is synchronized.</p>
             </EmptyState>
           </Card>
         )}
@@ -262,9 +258,17 @@ export default function SyncLogsPage() {
           <InlineStack align="center">
             <Pagination
               hasPrevious={page > 1}
+              onPrevious={() => {
+                const params = new URLSearchParams(searchParams);
+                params.set("page", String(page - 1));
+                setSearchParams(params);
+              }}
               hasNext={page < totalPages}
-              onPrevious={handlePrevious}
-              onNext={handleNext}
+              onNext={() => {
+                const params = new URLSearchParams(searchParams);
+                params.set("page", String(page + 1));
+                setSearchParams(params);
+              }}
               label={`Page ${page} of ${totalPages}`}
             />
           </InlineStack>
