@@ -24,6 +24,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV DATABASE_URL="file:/data/sqlite.db"
 
 # Copy production dependencies
 COPY --from=deps /app/node_modules ./node_modules
