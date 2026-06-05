@@ -26,7 +26,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // Get or create shop
   let shop = await db.shop.findUnique({ where: { shopDomain } });
   if (!shop) {
-    shop = await db.shop.create({ data: { shopDomain } });
+    shop = await db.shop.create({ data: { shopDomain, isActive: true } });
+  } else if (!shop.isActive) {
+    shop = await db.shop.update({
+      where: { shopDomain },
+      data: { isActive: true }
+    });
   }
 
   // Get stats
