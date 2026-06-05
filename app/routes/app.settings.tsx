@@ -34,6 +34,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
     await billing.require({
       plans: [MONTHLY_PLAN],
+      isTest: true, // Check for test subscriptions on development stores
       onFailure: async () => {
         hasActiveSubscription = false;
         return undefined as any;
@@ -81,21 +82,30 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { billing } = await authenticate.admin(request);
+  const { billing, session } = await authenticate.admin(request);
   const formData = await request.formData();
   const intent = formData.get("intent") as string;
 
   if (intent === "upgrade") {
-    await billing.require({
-      plans: [MONTHLY_PLAN],
-      isTest: process.env.NODE_ENV !== "production",
-      onFailure: async () =>
-        billing.request({
-          plan: MONTHLY_PLAN,
-          isTest: process.env.NODE_ENV !== "production",
-        }),
-    });
-    return { success: true };
+    try {
+      await billing.require({
+        plans: [MONTHLY_PLAN],
+        isTest: true, // Set to true to allow testing on development stores
+        onFailure: async () =>
+          billing.request({
+            plan: MONTHLY_PLAN,
+            isTest: true, // Set to true to allow testing on development stores
+            returnUrl: `https://${session.shop}/admin/apps/${process.env.SHOPIFY_API_KEY}/app/settings`,
+          }),
+      });
+      return { success: true };
+    } catch (error) {
+      if (error instanceof Response) {
+        // Shopify throws a Response to redirect the user to the billing approval page
+        throw error;
+      }
+      return { error: String(error) };
+    }
   }
 
   return { error: "Unknown action" };
