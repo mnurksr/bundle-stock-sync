@@ -6,11 +6,21 @@ import { NavMenu } from "@shopify/app-bridge-react";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 
 import { authenticate } from "../shopify.server";
+import db from "../db.server";
 
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
+  
+  // Ensure shop is active on ANY app page load
+  const shopDomain = session.shop;
+  let shop = await db.shop.findUnique({ where: { shopDomain } });
+  if (!shop) {
+    await db.shop.create({ data: { shopDomain, isActive: true } });
+  } else if (!shop.isActive) {
+    await db.shop.update({ where: { shopDomain }, data: { isActive: true } });
+  }
 
   return { apiKey: process.env.SHOPIFY_API_KEY || "" };
 };
