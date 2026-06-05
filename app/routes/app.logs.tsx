@@ -1,5 +1,5 @@
-import type { LoaderFunctionArgs } from "@remix-run/node";
-import { useLoaderData, useSearchParams, useNavigate } from "@remix-run/react";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import { useLoaderData, useSearchParams, useNavigate, useSubmit } from "@remix-run/react";
 import {
   Page,
   Layout,
@@ -13,10 +13,25 @@ import {
   Select,
   Pagination,
   Box,
+  Button,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const shopDomain = session.shop;
+  const shop = await db.shop.findUnique({ where: { shopDomain } });
+  
+  if (shop) {
+    const formData = await request.formData();
+    if (formData.get("action") === "clearLogs") {
+      await db.syncLog.deleteMany({ where: { shopId: shop.id } });
+    }
+  }
+  return null;
+};
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -80,6 +95,13 @@ export default function SyncLogsPage() {
     useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const submit = useSubmit();
+
+  const handleClearLogs = () => {
+    if (confirm("Are you sure you want to delete all sync logs? This cannot be undone.")) {
+      submit({ action: "clearLogs" }, { method: "post" });
+    }
+  };
 
   const handleStatusChange = (value: string) => {
     const params = new URLSearchParams(searchParams);
@@ -134,56 +156,54 @@ export default function SyncLogsPage() {
     { label: "Pending", value: "pending" },
   ];
 
-  const rowMarkup = logs.map((log, index) => (
-    <IndexTable.Row id={log.id} key={log.id} position={index}>
-      <IndexTable.Cell>
-        <Text as="span" variant="bodySm">
-          {formatDate(log.createdAt)}
-        </Text>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <Text as="span" variant="bodyMd" fontWeight="semibold">
-          {log.orderName}
-        </Text>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <Text as="span" variant="bodyMd">
-          {log.bundleProductTitle}
-        </Text>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <Text as="span" variant="bodyMd">
-          {log.baseProductTitle}
-        </Text>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <Text as="span" alignment="center">
-          {log.orderName.includes("Up-Sync") ? "-" : log.quantitySold}
-        </Text>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <Text as="span" alignment="center">
-          ×{log.multiplier}
-        </Text>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        {log.orderName.includes("Up-Sync") ? (
-          <Text as="span" fontWeight="bold" tone="success">
-            = {log.totalAdjustment}
+  const rowMarkup = logs.map((log, index) => {
+    const isUpSync = log.orderName.includes("Up-Sync") || log.orderName === "Base Stock Changed";
+    
+    // Format Event Name
+    const eventName = isUpSync ? "Base Stock Changed" : `Order ${log.orderName}`;
+    
+    // Format Action Description
+    let actionDescription = "";
+    if (isUpSync) {
+      actionDescription = `Set Bundle stock to ${log.totalAdjustment} (Base stock is ${log.quantitySold})`;
+    } else {
+      actionDescription = `Deducted ${log.totalAdjustment} units from Base Product (Sold: ${log.quantitySold} bundle${log.quantitySold > 1 ? 's' : ''})`;
+    }
+
+    return (
+      <IndexTable.Row id={log.id} key={log.id} position={index}>
+        <IndexTable.Cell>
+          <Text as="span" variant="bodySm">
+            {formatDate(log.createdAt)}
           </Text>
-        ) : (
-          <Text as="span" fontWeight="bold" tone="critical">
-            -{log.totalAdjustment}
+        </IndexTable.Cell>
+        <IndexTable.Cell>
+          <Text as="span" variant="bodyMd" fontWeight="bold">
+            {eventName}
           </Text>
-        )}
-      </IndexTable.Cell>
-      <IndexTable.Cell>{statusBadge(log.status)}</IndexTable.Cell>
-    </IndexTable.Row>
-  ));
+        </IndexTable.Cell>
+        <IndexTable.Cell>
+          <Text as="span" variant="bodyMd">
+            {log.bundleProductTitle} ↔ {log.baseProductTitle}
+          </Text>
+        </IndexTable.Cell>
+        <IndexTable.Cell>
+          <Text as="span" tone={isUpSync ? "success" : "critical"}>
+            {actionDescription}
+          </Text>
+        </IndexTable.Cell>
+        <IndexTable.Cell>{statusBadge(log.status)}</IndexTable.Cell>
+      </IndexTable.Row>
+    );
+  });
 
   return (
     <Page>
-      <TitleBar title="Sync Logs" />
+      <TitleBar title="Sync Logs">
+        <button variant="primary" tone="critical" onClick={handleClearLogs}>
+          Clear All Logs
+        </button>
+      </TitleBar>
 
       <BlockStack gap="500">
         {/* Filters */}
@@ -212,12 +232,9 @@ export default function SyncLogsPage() {
               itemCount={logs.length}
               headings={[
                 { title: "Date/Time" },
-                { title: "Order" },
-                { title: "Bundle Product" },
-                { title: "Base Product" },
-                { title: "Qty Sold" },
-                { title: "Multiplier" },
-                { title: "Adjustment" },
+                { title: "Event / Trigger" },
+                { title: "Rule (Bundle ↔ Base)" },
+                { title: "Action Taken" },
                 { title: "Status" },
               ]}
               selectable={false}

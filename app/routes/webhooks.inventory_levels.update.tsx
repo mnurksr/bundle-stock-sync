@@ -95,6 +95,32 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       if (!bundleInventoryItemId) continue;
 
+      // Check current bundle stock at this location to prevent ECHO logs
+      const bundleInventoryResponse = await admin.graphql(
+        `#graphql
+        query getInventoryLevel($inventoryItemId: ID!, $locationId: ID!) {
+          inventoryLevel(inventoryItemId: $inventoryItemId, locationId: $locationId) {
+            quantities(names: ["available"]) {
+              quantity
+            }
+          }
+        }`,
+        {
+          variables: {
+            inventoryItemId: bundleInventoryItemId,
+            locationId: gidLocationId,
+          },
+        }
+      );
+
+      const bundleInventoryData = await bundleInventoryResponse.json();
+      const currentBundleStock = bundleInventoryData.data?.inventoryLevel?.quantities?.[0]?.quantity || 0;
+
+      if (currentBundleStock === newBundleStock) {
+        console.log(`[Up-Sync] Echo prevented: Bundle stock for rule ${rule.id} is already ${newBundleStock}.`);
+        continue; // Skip Shopify API call and skip logging!
+      }
+
       // SET the absolute stock for the bundle product at the same location targeting "available" directly
       const setStockResponse = await admin.graphql(
         `#graphql
