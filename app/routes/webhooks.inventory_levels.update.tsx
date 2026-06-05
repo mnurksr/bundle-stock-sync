@@ -137,9 +137,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           orderId: `inventory-${payload.updated_at || Date.now()}`,
           orderName: "Up-Sync Error",
           bundleRuleId: rule.id,
-          syncType: "up",
+          bundleVariantId: rule.bundleVariantId,
+          baseVariantId: rule.baseVariantId,
+          quantitySold: 0,
+          multiplier: rule.multiplier,
+          totalAdjustment: 0,
           status: "failed",
-          details: `Error setting bundle stock: ${JSON.stringify(setStockData.data.inventorySetQuantities.userErrors)}`,
+          errorMessage: `Error: ${JSON.stringify(setStockData.data.inventorySetQuantities.userErrors)}`,
           idempotencyKey: `up-sync-${rule.id}-${payload.updated_at || Date.now()}`
         });
 
@@ -151,9 +155,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           orderId: `inventory-${payload.updated_at || Date.now()}`,
           orderName: "Auto Up-Sync",
           bundleRuleId: rule.id,
-          syncType: "up",
+          bundleVariantId: rule.bundleVariantId,
+          baseVariantId: rule.baseVariantId,
+          quantitySold: newAvailableCount, // Storing single stock here for visibility
+          multiplier: rule.multiplier,
+          totalAdjustment: newBundleStock, // Storing calculated bundle stock here for visibility
           status: "success",
-          details: `Single product stock changed to ${newAvailableCount}. Auto-calculated and set bundle stock to ${newBundleStock}.`,
+          errorMessage: `Base stock: ${newAvailableCount} -> Bundle stock: ${newBundleStock}`,
           idempotencyKey: `up-sync-${rule.id}-${payload.updated_at || Date.now()}`
         });
       }
