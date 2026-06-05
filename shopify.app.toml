@@ -1,0 +1,39 @@
+# Bundle Stock Sync — Shopify Public App Configuration
+# Automatically sync multipack/bundle inventory with base product stock.
+
+client_id = ""
+
+[access_scopes]
+# Required scopes for inventory sync operations
+scopes = "read_products,read_orders,read_inventory,write_inventory"
+
+[webhooks]
+api_version = "2026-04"
+
+  # Core: Inventory sync trigger when an order is paid
+  [[webhooks.subscriptions]]
+  topics = ["orders/paid"]
+  uri = "/webhooks/orders/paid"
+
+  # App lifecycle: Clean up on uninstall
+  [[webhooks.subscriptions]]
+  topics = ["app/uninstalled"]
+  uri = "/webhooks/app/uninstalled"
+
+  # App lifecycle: Scope changes
+  [[webhooks.subscriptions]]
+  topics = ["app/scopes_update"]
+  uri = "/webhooks/app/scopes_update"
+
+  # Mandatory GDPR compliance webhooks (required for App Store)
+  [[webhooks.subscriptions]]
+  uri = "/webhooks"
+  compliance_topics = ["customers/data_request"]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks"
+  compliance_topics = ["customers/redact"]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks"
+  compliance_topics = ["shop/redact"]
