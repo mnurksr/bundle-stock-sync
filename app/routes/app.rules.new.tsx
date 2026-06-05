@@ -15,6 +15,7 @@ import {
   Thumbnail,
   Box,
   List,
+  Checkbox,
 } from "@shopify/polaris";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
@@ -126,6 +127,69 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     },
   });
 
+  const syncImmediately = formData.get("syncImmediately") === "true";
+  if (syncImmediately) {
+    try {
+      const queryResponse = await admin.graphql(
+        `#graphql
+        query getSyncData($baseId: ID!, $bundleId: ID!) {
+          baseVariant: productVariant(id: $baseId) {
+            inventoryItem {
+              inventoryLevels(first: 50) {
+                edges {
+                  node {
+                    location { id }
+                    quantities(names: ["available"]) { quantity }
+                  }
+                }
+              }
+            }
+          }
+          bundleVariant: productVariant(id: $bundleId) {
+            inventoryItem { id }
+          }
+        }`,
+        { variables: { baseId: baseVariantId, bundleId: bundleVariantId } }
+      );
+      const data = await queryResponse.json();
+      const bundleInventoryItemId = data.data?.bundleVariant?.inventoryItem?.id;
+      const baseLevels = data.data?.baseVariant?.inventoryItem?.inventoryLevels?.edges || [];
+
+      if (bundleInventoryItemId && baseLevels.length > 0) {
+        for (const edge of baseLevels) {
+          const locationId = edge.node.location.id;
+          const available = edge.node.quantities[0]?.quantity || 0;
+          const newBundleStock = Math.max(0, Math.floor(available / multiplier));
+
+          await admin.graphql(
+            `#graphql
+            mutation setBundleStock($input: InventorySetOnHandQuantitiesInput!) {
+              inventorySetOnHandQuantities(input: $input) {
+                userErrors { message }
+              }
+            }`,
+            {
+              variables: {
+                input: {
+                  reason: "correction",
+                  setQuantities: [
+                    {
+                      inventoryItemId: bundleInventoryItemId,
+                      locationId,
+                      quantity: newBundleStock,
+                    },
+                  ],
+                },
+              },
+            }
+          );
+        }
+      }
+    } catch (e) {
+      console.error("Failed to execute initial sync:", e);
+    }
+  }
+
   return redirect("/app/rules");
 };
 
@@ -154,6 +218,7 @@ export default function NewBundleRulePage() {
   );
   const [baseProduct, setBaseProduct] = useState<SelectedProduct | null>(null);
   const [multiplier, setMultiplier] = useState("5");
+  const [syncImmediately, setSyncImmediately] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
   const selectBundleProduct = useCallback(async () => {
@@ -219,6 +284,7 @@ export default function NewBundleRulePage() {
     formData.append("baseProductTitle", baseProduct.title);
     formData.append("baseSku", baseVariant.sku || "");
     formData.append("multiplier", multiplier);
+    formData.append("syncImmediately", String(syncImmediately));
 
     submit(formData, { method: "POST" });
   }, [bundleProduct, baseProduct, multiplier, submit]);
@@ -352,6 +418,21 @@ export default function NewBundleRulePage() {
                     min={1}
                     autoComplete="off"
                     helpText="Example: If selling a 5-pack, set multiplier to 5. When 1 bundle is sold, 5 units will be deducted from the base product's inventory."
+                  />
+                </BlockStack>
+              </Card>
+
+              {/* Initial Sync */}
+              <Card>
+                <BlockStack gap="400">
+                  <Text as="h2" variant="headingMd">
+                    ⚡ Initial Sync
+                  </Text>
+                  <Checkbox
+                    label="Sync bundle inventory immediately"
+                    helpText="If checked, the bundle product's inventory will be immediately updated to match the base product's current inventory upon saving."
+                    checked={syncImmediately}
+                    onChange={setSyncImmediately}
                   />
                 </BlockStack>
               </Card>
