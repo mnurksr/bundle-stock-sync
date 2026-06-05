@@ -95,7 +95,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           billing.request({
             plan: MONTHLY_PLAN,
             isTest: true, // Set to true to allow testing on development stores
-            returnUrl: `https://${session.shop}/admin/apps/${process.env.SHOPIFY_API_KEY}/app/settings`,
           }),
       });
       return { success: true };
@@ -352,7 +351,7 @@ export default function SettingsPage() {
                     If you encounter any issues or have feature requests,
                     please reach out to our support team.
                   </Text>
-                  <Button url="mailto:support@bundlestocksync.com" external>
+                  <Button onClick={() => window.open("mailto:support@bundlestocksync.com", "_top")}>
                     Contact Support
                   </Button>
                 </BlockStack>

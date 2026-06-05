@@ -12,6 +12,11 @@ scopes = "read_orders,read_products,write_products,read_inventory,write_inventor
 [webhooks]
 api_version = "2025-01"
 
+  [webhooks.privacy_compliance]
+  customer_deletion_url = "https://bundle.mercsync.com/webhooks/privacy/customers/redact"
+  customer_data_request_url = "https://bundle.mercsync.com/webhooks/privacy/customers/data_request"
+  shop_deletion_url = "https://bundle.mercsync.com/webhooks/privacy/shop/redact"
+
   [[webhooks.subscriptions]]
   uri = "/webhooks/orders/paid"
   topics = [ "orders/paid" ]
@@ -19,6 +24,10 @@ api_version = "2025-01"
   [[webhooks.subscriptions]]
   uri = "/webhooks/app/uninstalled"
   topics = [ "app/uninstalled" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/inventory_levels/update"
+  topics = [ "inventory_levels/update" ]
 
   [[webhooks.subscriptions]]
   uri = "/webhooks/app/scopes_update"
