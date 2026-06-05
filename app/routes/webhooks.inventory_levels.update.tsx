@@ -178,20 +178,37 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       } else {
         console.log(`Successfully synced UP bundle stock for rule ${rule.id} to ${newBundleStock} (Available)`);
         
-        await createSyncLog({
-          shopId: shop.id,
-          orderId: `inventory-${payload.updated_at || Date.now()}`,
-          orderName: "Auto Up-Sync",
-          bundleRuleId: rule.id,
-          bundleVariantId: rule.bundleVariantId,
-          baseVariantId: rule.baseVariantId,
-          quantitySold: newAvailableCount, // Storing single stock here for visibility
-          multiplier: rule.multiplier,
-          totalAdjustment: newBundleStock, // Storing calculated bundle stock here for visibility
-          status: "success",
-          errorMessage: `Base stock: ${newAvailableCount} -> Bundle stock: ${newBundleStock}`,
-          idempotencyKey: `up-sync-${rule.id}-${payload.updated_at || Date.now()}`
+        // --- VISUAL ECHO PREVENTER ---
+        // If an order down-sync happened in the last 15 seconds, we don't need to bother the user with an "Up-Sync" log
+        // because the user already knows the order caused the stock change.
+        const fifteenSecondsAgo = new Date(Date.now() - 15 * 1000);
+        const recentOrderLog = await db.syncLog.findFirst({
+          where: {
+            shopId: shop.id,
+            bundleRuleId: rule.id,
+            orderName: { notIn: ["Base Stock Changed", "Auto Up-Sync", "Up-Sync Error"] },
+            createdAt: { gte: fifteenSecondsAgo }
+          }
         });
+
+        if (recentOrderLog) {
+          console.log(`[Up-Sync] Suppressing log because Order ${recentOrderLog.orderName} just occurred.`);
+        } else {
+          await createSyncLog({
+            shopId: shop.id,
+            orderId: `inventory-${payload.updated_at || Date.now()}`,
+            orderName: "Base Stock Changed", // Keeping it consistent with the new UI format
+            bundleRuleId: rule.id,
+            bundleVariantId: rule.bundleVariantId,
+            baseVariantId: rule.baseVariantId,
+            quantitySold: newAvailableCount, // Storing single stock here for visibility
+            multiplier: rule.multiplier,
+            totalAdjustment: newBundleStock, // Storing calculated bundle stock here for visibility
+            status: "success",
+            errorMessage: `Base stock: ${newAvailableCount} -> Bundle stock: ${newBundleStock}`,
+            idempotencyKey: `up-sync-${rule.id}-${payload.updated_at || Date.now()}`
+          });
+        }
       }
     } catch (error) {
       console.error(`Error processing up-sync for rule ${rule.id}:`, error);
