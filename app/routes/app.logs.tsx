@@ -165,7 +165,7 @@ export default function SyncLogsPage() {
     // Format Action Description
     let actionDescription = "";
     if (isUpSync) {
-      actionDescription = `Bundle = ${log.totalAdjustment} (Base is ${log.quantitySold})`;
+      actionDescription = `Set Bundle to ${log.totalAdjustment} (Because Single Stock is ${log.quantitySold})`;
     } else {
       actionDescription = `Base -${log.totalAdjustment} (${log.quantitySold} Bundle Sold)`;
     }
