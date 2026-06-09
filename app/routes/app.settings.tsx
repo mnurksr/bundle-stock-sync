@@ -35,7 +35,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
     await billing.require({
       plans: [MONTHLY_PLAN],
-      isTest: true, // Check for test subscriptions on development stores
+      isTest: !process.env.NODE_ENV || process.env.NODE_ENV === "development",
       onFailure: async () => {
         hasActiveSubscription = false;
         return undefined as any;
@@ -91,22 +91,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     try {
       await billing.require({
         plans: [MONTHLY_PLAN],
-        isTest: true, // Set to true to allow testing on development stores
+        isTest: !process.env.NODE_ENV || process.env.NODE_ENV === "development",
         onFailure: async () =>
           billing.request({
             plan: MONTHLY_PLAN,
-            isTest: true, // Set to true to allow testing on development stores
+            isTest: !process.env.NODE_ENV || process.env.NODE_ENV === "development",
           }),
       });
       return { success: true };
     } catch (error: any) {
-      if (error instanceof Response) {
+      if (error instanceof Response || (error && error.status && error.headers)) {
         // Shopify throws a Response to redirect the user to the billing approval page
         throw error;
       }
-      // Note: We cannot easily use t() here since this is in the server action. 
-      // We will leave the fallback message in English or pass a key.
-      // Let's pass the error key and we can translate it in the component if needed.
+      console.error("Billing error:", error);
       return { 
         error: "settings_billing_error" 
       };
