@@ -12,8 +12,32 @@ import { LanguageProvider, useTranslation } from "../utils/i18n";
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin, redirect } = await authenticate.admin(request);
   
+  // Enforce plan selection on first load (Managed Pricing workflow)
+  try {
+    const response = await admin.graphql(`
+      query {
+        currentAppInstallation {
+          activeSubscriptions {
+            id
+          }
+        }
+      }
+    `);
+    
+    const { data } = await response.json();
+    const activeSubscriptions = data?.currentAppInstallation?.activeSubscriptions || [];
+    
+    if (activeSubscriptions.length === 0) {
+      const shopHandle = session.shop.replace(".myshopify.com", "");
+      throw redirect(`https://admin.shopify.com/store/${shopHandle}/charges/bundle-stock-sync-3/pricing_plans`, { target: "_top" });
+    }
+  } catch (error) {
+    if (error instanceof Response) throw error; // Re-throw the redirect Response
+    console.error("Failed to check active subscriptions:", error);
+  }
+
   // Extract locale from request URL (Shopify passes it like ?locale=tr-TR or just tr)
   const url = new URL(request.url);
   const rawLocale = url.searchParams.get("locale") || "en";
