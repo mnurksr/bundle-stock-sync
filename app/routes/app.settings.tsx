@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData, useActionData, useFetcher, Form, useNavigation } from "@remix-run/react";
 import {
@@ -116,8 +117,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       } catch (e) {}
       console.error("--------------------------");
 
-      // If it's a Response (redirect), we MUST throw it so Remix can handle the redirect
+      // If it's a Response (redirect), extract the Location header and return it for manual frontend redirect
       if (error instanceof Response || error.status === 302 || typeof error?.headers?.get === "function") {
+        const location = error.headers?.get?.("Location") || error.headers?.get?.("location");
+        if (location) {
+          return { redirectUrl: location, error: undefined, details: undefined, success: undefined };
+        }
         throw error;
       }
       
@@ -126,23 +131,34 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       // If Shopify rejects the live charge because this is a development store, retry with a test charge
       if (errorMessage.includes("development store") || errorMessage.includes("test")) {
         console.log("Detected development store, retrying with test charge.");
-        await billing.require({
-          plans: [MONTHLY_PLAN],
-          isTest: true,
-          onFailure: async () =>
-            billing.request({
-              plan: MONTHLY_PLAN,
-              isTest: true,
-            }),
-        });
-        return { success: true };
+        try {
+          await billing.require({
+            plans: [MONTHLY_PLAN],
+            isTest: true,
+            onFailure: async () =>
+              billing.request({
+                plan: MONTHLY_PLAN,
+                isTest: true,
+              }),
+          });
+          return { success: true, error: undefined, details: undefined, redirectUrl: undefined };
+        } catch (fallbackError: any) {
+          if (fallbackError instanceof Response || fallbackError.status === 302 || typeof fallbackError?.headers?.get === "function") {
+            const fallbackLocation = fallbackError.headers?.get?.("Location") || fallbackError.headers?.get?.("location");
+            if (fallbackLocation) {
+              return { redirectUrl: fallbackLocation, error: undefined, details: undefined, success: undefined };
+            }
+            throw fallbackError;
+          }
+          return { error: "settings_billing_error", details: fallbackError?.message || "Unknown fallback error", success: undefined, redirectUrl: undefined };
+        }
       }
 
-      return { error: "settings_billing_error", details: error?.message || "Unknown error" };
+      return { error: "settings_billing_error", details: error?.message || "Unknown error", success: undefined, redirectUrl: undefined };
     }
   }
 
-  return { error: "Unknown action" };
+  return { error: "Unknown action", details: undefined, success: undefined, redirectUrl: undefined };
 };
 
 export default function SettingsPage() {
@@ -167,15 +183,23 @@ export default function SettingsPage() {
     });
   };
 
+  useEffect(() => {
+    if (actionData && "redirectUrl" in actionData && actionData.redirectUrl) {
+      if (typeof window !== "undefined") {
+        window.open(actionData.redirectUrl, "_top");
+      }
+    }
+  }, [actionData]);
+
   return (
     <Page>
       <TitleBar title="Settings" />
 
       <BlockStack gap="500">
-        {actionData?.error && (
+        {(actionData as any)?.error && (
           <Banner title="Error" tone="critical">
             <p>
-              {actionData.error === "dev_store_billing_error" 
+              {(actionData as any).error === "dev_store_billing_error" 
                 ? "Billing Error: Cannot create real charges on a Development Store. To test billing, you must run the app in development mode."
                 : "Billing Error: Something went wrong. Please try again or contact support."}
             </p>

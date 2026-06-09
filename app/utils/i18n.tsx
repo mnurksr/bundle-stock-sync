@@ -515,7 +515,7 @@ export const LanguageProvider = ({
   const safeLocale = translations[locale] ? locale : "en";
   
   const t = (key: TranslationKey, params?: Record<string, string | number>): string => {
-    let str = translations[safeLocale][key] || translations.en[key] || key;
+    let str = (translations[safeLocale] as any)[key] || translations.en[key] || key;
     if (params) {
       Object.keys(params).forEach(k => {
         str = str.replace(`{${k}}`, String(params[k]));
