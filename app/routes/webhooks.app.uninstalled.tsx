@@ -20,6 +20,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         where: { shopDomain: shop },
         data: {
           isActive: false,
+          plan: "free",
           uninstalledAt: new Date(),
         },
       });

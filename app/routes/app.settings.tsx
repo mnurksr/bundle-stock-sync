@@ -53,6 +53,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       data: { plan: "pro" },
     });
     shop = await db.shop.findUnique({ where: { shopDomain } });
+  } else if (!hasActiveSubscription && shop.plan !== "free") {
+    await db.shop.update({
+      where: { shopDomain },
+      data: { plan: "free" },
+    });
+    shop = await db.shop.findUnique({ where: { shopDomain } });
   }
 
   const now = new Date();
