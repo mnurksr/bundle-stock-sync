@@ -100,14 +100,31 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           }),
       });
       return { success: true };
-    } catch (error: any) {
+      } catch (error: any) {
+      console.error("--- BILLING CRASH DUMP ---");
+      console.error(error);
+      if (error instanceof Error) {
+        console.error("Message:", error.message);
+        console.error("Stack:", error.stack);
+      }
+      if (error instanceof Response) {
+        console.error("Response Status:", error.status);
+        console.error("Response Headers:", Object.fromEntries(error.headers.entries()));
+      }
+      try {
+        console.error("JSON Stringify:", JSON.stringify(error));
+      } catch (e) {}
+      console.error("--------------------------");
+
       // If it's a Response (redirect), we MUST throw it so Remix can handle the redirect
       if (error instanceof Response || error.status === 302 || typeof error?.headers?.get === "function") {
         throw error;
       }
       
+      const errorMessage = error?.message?.toLowerCase() || "";
+      
       // If Shopify rejects the live charge because this is a development store, retry with a test charge
-      if (error?.message?.toLowerCase().includes("development store") || error?.message?.includes("test")) {
+      if (errorMessage.includes("development store") || errorMessage.includes("test")) {
         console.log("Detected development store, retrying with test charge.");
         await billing.require({
           plans: [MONTHLY_PLAN],
@@ -121,8 +138,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return { success: true };
       }
 
-      console.error("Billing API Error:", error.message || error);
-      return { error: "settings_billing_error", details: error.message || "Unknown error" };
+      return { error: "settings_billing_error", details: error?.message || "Unknown error" };
     }
   }
 
