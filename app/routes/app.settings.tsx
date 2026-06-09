@@ -94,27 +94,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const intent = formData.get("intent") as string;
 
   if (intent === "upgrade") {
-    try {
-      await billing.require({
-        plans: [MONTHLY_PLAN],
-        isTest: !process.env.NODE_ENV || process.env.NODE_ENV === "development",
-        onFailure: async () =>
-          billing.request({
-            plan: MONTHLY_PLAN,
-            isTest: !process.env.NODE_ENV || process.env.NODE_ENV === "development",
-          }),
-      });
-      return { success: true };
-    } catch (error: any) {
-      if (error instanceof Response || (error && error.status && error.headers)) {
-        // Shopify throws a Response to redirect the user to the billing approval page
-        throw error;
-      }
-      console.error("Billing error:", error);
-      return { 
-        error: "settings_billing_error" 
-      };
-    }
+    await billing.require({
+      plans: [MONTHLY_PLAN],
+      isTest: !process.env.NODE_ENV || process.env.NODE_ENV === "development",
+      onFailure: async () =>
+        billing.request({
+          plan: MONTHLY_PLAN,
+          isTest: !process.env.NODE_ENV || process.env.NODE_ENV === "development",
+        }),
+    });
+    return { success: true };
   }
 
   return { error: "Unknown action" };
