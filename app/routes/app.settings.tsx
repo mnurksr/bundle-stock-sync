@@ -94,16 +94,31 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const intent = formData.get("intent") as string;
 
   if (intent === "upgrade") {
-    await billing.require({
-      plans: [MONTHLY_PLAN],
-      isTest: !process.env.NODE_ENV || process.env.NODE_ENV === "development",
-      onFailure: async () =>
-        billing.request({
-          plan: MONTHLY_PLAN,
-          isTest: !process.env.NODE_ENV || process.env.NODE_ENV === "development",
-        }),
-    });
-    return { success: true };
+    try {
+      await billing.require({
+        plans: [MONTHLY_PLAN],
+        isTest: !process.env.NODE_ENV || process.env.NODE_ENV === "development",
+        onFailure: async () =>
+          billing.request({
+            plan: MONTHLY_PLAN,
+            isTest: !process.env.NODE_ENV || process.env.NODE_ENV === "development",
+          }),
+      });
+      return { success: true };
+    } catch (error: any) {
+      // If it's a Response (redirect), we MUST throw it so Remix can handle the redirect
+      if (error instanceof Response || error.status === 302 || typeof error?.headers?.get === "function") {
+        throw error;
+      }
+      
+      console.error("Billing API Error:", error.message || error);
+      
+      if (error?.message?.toLowerCase().includes("development store") || error?.message?.includes("isTest")) {
+        return { error: "dev_store_billing_error", details: error.message };
+      }
+
+      return { error: "settings_billing_error", details: error.message || "Unknown error" };
+    }
   }
 
   return { error: "Unknown action" };
@@ -136,9 +151,13 @@ export default function SettingsPage() {
       <TitleBar title="Settings" />
 
       <BlockStack gap="500">
-        {"error" in (actionData || {}) && (
+        {actionData?.error && (
           <Banner title="Error" tone="critical">
-            <p>{(actionData as any).error === "settings_billing_error" ? t("settings_billing_error") : (actionData as any).error}</p>
+            <p>
+              {actionData.error === "dev_store_billing_error" 
+                ? "Billing Error: Cannot create real charges on a Development Store. To test billing, you must run the app in development mode."
+                : "Billing Error: Something went wrong. Please try again or contact support."}
+            </p>
           </Banner>
         )}
 
