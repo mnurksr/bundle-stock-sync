@@ -116,10 +116,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         console.error("JSON Stringify:", JSON.stringify(error));
       } catch (e) {}
       console.error("--------------------------");
+      console.log("--- ERROR DIAGNOSTICS ---");
+      console.log("Constructor:", error?.constructor?.name);
+      console.log("instanceof Response:", error instanceof Response);
+      console.log("Keys:", Object.keys(error || {}));
+      console.log("Status:", error?.status);
+      console.log("Headers:", error?.headers);
+      console.log("Headers get:", typeof error?.headers?.get);
+      console.log("Message:", error?.message);
+      console.log("-------------------------");
 
       // If it's a Response (redirect), extract the Location header and return it for manual frontend redirect
-      if (error instanceof Response || error.status === 302 || typeof error?.headers?.get === "function") {
-        const location = error.headers?.get?.("Location") || error.headers?.get?.("location");
+      if (error instanceof Response || error?.status === 302 || typeof error?.headers?.get === "function" || error?.constructor?.name === "Response") {
+        const location = error?.headers?.get?.("Location") || error?.headers?.get?.("location");
         if (location) {
           return { redirectUrl: location, error: undefined, details: undefined, success: undefined };
         }
@@ -143,18 +152,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           });
           return { success: true, error: undefined, details: undefined, redirectUrl: undefined };
         } catch (fallbackError: any) {
-          if (fallbackError instanceof Response || fallbackError.status === 302 || typeof fallbackError?.headers?.get === "function") {
-            const fallbackLocation = fallbackError.headers?.get?.("Location") || fallbackError.headers?.get?.("location");
+          if (fallbackError instanceof Response || fallbackError?.status === 302 || typeof fallbackError?.headers?.get === "function" || fallbackError?.constructor?.name === "Response") {
+            const fallbackLocation = fallbackError?.headers?.get?.("Location") || fallbackError?.headers?.get?.("location");
             if (fallbackLocation) {
               return { redirectUrl: fallbackLocation, error: undefined, details: undefined, success: undefined };
             }
             throw fallbackError;
           }
-          return { error: "settings_billing_error", details: fallbackError?.message || "Unknown fallback error", success: undefined, redirectUrl: undefined };
+          return { error: "settings_billing_error", details: `Fallback Error: ${fallbackError?.message || fallbackError} - ${JSON.stringify(fallbackError)}`, success: undefined, redirectUrl: undefined };
         }
       }
 
-      return { error: "settings_billing_error", details: error?.message || "Unknown error", success: undefined, redirectUrl: undefined };
+      return { error: "settings_billing_error", details: `Original Error: ${error?.message || error} - ${JSON.stringify(error)}`, success: undefined, redirectUrl: undefined };
     }
   }
 
@@ -203,6 +212,11 @@ export default function SettingsPage() {
                 ? "Billing Error: Cannot create real charges on a Development Store. To test billing, you must run the app in development mode."
                 : "Billing Error: Something went wrong. Please try again or contact support."}
             </p>
+            {(actionData as any).details && (
+              <p style={{ marginTop: "1rem", fontSize: "12px", fontFamily: "monospace" }}>
+                Details: {(actionData as any).details}
+              </p>
+            )}
           </Banner>
         )}
 
