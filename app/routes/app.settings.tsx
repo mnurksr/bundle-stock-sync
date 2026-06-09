@@ -90,81 +90,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const intent = formData.get("intent") as string;
 
   if (intent === "upgrade") {
-    try {
-      await billing.require({
-        plans: [MONTHLY_PLAN],
-        isTest: false,
-        onFailure: async () =>
-          billing.request({
-            plan: MONTHLY_PLAN,
-            isTest: false,
-          }),
-      });
-      return { success: true };
-      } catch (error: any) {
-      console.error("--- BILLING CRASH DUMP ---");
-      console.error(error);
-      if (error instanceof Error) {
-        console.error("Message:", error.message);
-        console.error("Stack:", error.stack);
-      }
-      if (error instanceof Response) {
-        console.error("Response Status:", error.status);
-        console.error("Response Headers:", Object.fromEntries(error.headers.entries()));
-      }
-      try {
-        console.error("JSON Stringify:", JSON.stringify(error));
-      } catch (e) {}
-      console.error("--------------------------");
-      console.log("--- ERROR DIAGNOSTICS ---");
-      console.log("Constructor:", error?.constructor?.name);
-      console.log("instanceof Response:", error instanceof Response);
-      console.log("Keys:", Object.keys(error || {}));
-      console.log("Status:", error?.status);
-      console.log("Headers:", error?.headers);
-      console.log("Headers get:", typeof error?.headers?.get);
-      console.log("Message:", error?.message);
-      console.log("-------------------------");
-
-      // If it's a Response (redirect), extract the Location header and return it for manual frontend redirect
-      if (error instanceof Response || error?.status === 302 || typeof error?.headers?.get === "function" || error?.constructor?.name === "Response") {
-        const location = error?.headers?.get?.("Location") || error?.headers?.get?.("location");
-        if (location) {
-          return { redirectUrl: location, error: undefined, details: undefined, success: undefined };
-        }
-        throw error;
-      }
-      
-      const errorMessage = error?.message?.toLowerCase() || "";
-      
-      // If Shopify rejects the live charge because this is a development store, retry with a test charge
-      if (errorMessage.includes("development store") || errorMessage.includes("test")) {
-        console.log("Detected development store, retrying with test charge.");
-        try {
-          await billing.require({
-            plans: [MONTHLY_PLAN],
-            isTest: true,
-            onFailure: async () =>
-              billing.request({
-                plan: MONTHLY_PLAN,
-                isTest: true,
-              }),
-          });
-          return { success: true, error: undefined, details: undefined, redirectUrl: undefined };
-        } catch (fallbackError: any) {
-          if (fallbackError instanceof Response || fallbackError?.status === 302 || typeof fallbackError?.headers?.get === "function" || fallbackError?.constructor?.name === "Response") {
-            const fallbackLocation = fallbackError?.headers?.get?.("Location") || fallbackError?.headers?.get?.("location");
-            if (fallbackLocation) {
-              return { redirectUrl: fallbackLocation, error: undefined, details: undefined, success: undefined };
-            }
-            throw fallbackError;
-          }
-          return { error: "settings_billing_error", details: `Fallback Error: ${fallbackError?.message || fallbackError} - ${JSON.stringify(fallbackError)}`, success: undefined, redirectUrl: undefined };
-        }
-      }
-
-      return { error: "settings_billing_error", details: `Original Error: ${error?.message || error} - ${JSON.stringify(error)}`, success: undefined, redirectUrl: undefined };
-    }
+    // Get the shop from the session
+    const { session } = await authenticate.admin(request);
+    const shop = session.shop.replace(".myshopify.com", "");
+    
+    // Instead of using Billing API (which throws an error when Managed Pricing is enabled),
+    // we redirect the merchant to the Shopify-hosted Managed Pricing page.
+    // The handle is "bundle-stock-sync-3" based on the user's screenshots.
+    const redirectUrl = `https://admin.shopify.com/store/${shop}/charges/bundle-stock-sync-3/pricing_plans`;
+    
+    return { redirectUrl, success: true, error: undefined, details: undefined };
   }
 
   return { error: "Unknown action", details: undefined, success: undefined, redirectUrl: undefined };
