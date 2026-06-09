@@ -30,19 +30,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     shop = await db.shop.create({ data: { shopDomain } });
   }
 
-  // Check current billing status
+  // Check current billing status (check both live and test charges)
   let hasActiveSubscription = false;
   try {
-    await billing.require({
-      plans: [MONTHLY_PLAN],
-      isTest: !process.env.NODE_ENV || process.env.NODE_ENV === "development",
-      onFailure: async () => {
-        hasActiveSubscription = false;
-        return undefined as any;
-      },
-    });
-    hasActiveSubscription = true;
-  } catch {
+    const liveCheck = await billing.check({ plans: [MONTHLY_PLAN], isTest: false });
+    const testCheck = await billing.check({ plans: [MONTHLY_PLAN], isTest: true });
+    hasActiveSubscription = liveCheck.hasActivePayment || testCheck.hasActivePayment;
+  } catch (e) {
+    console.error("Failed to check billing status:", e);
     hasActiveSubscription = false;
   }
 
@@ -97,11 +92,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     try {
       await billing.require({
         plans: [MONTHLY_PLAN],
-        isTest: !process.env.NODE_ENV || process.env.NODE_ENV === "development",
+        isTest: false,
         onFailure: async () =>
           billing.request({
             plan: MONTHLY_PLAN,
-            isTest: !process.env.NODE_ENV || process.env.NODE_ENV === "development",
+            isTest: false,
           }),
       });
       return { success: true };
@@ -111,12 +106,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         throw error;
       }
       
-      console.error("Billing API Error:", error.message || error);
-      
-      if (error?.message?.toLowerCase().includes("development store") || error?.message?.includes("isTest")) {
-        return { error: "dev_store_billing_error", details: error.message };
+      // If Shopify rejects the live charge because this is a development store, retry with a test charge
+      if (error?.message?.toLowerCase().includes("development store") || error?.message?.includes("test")) {
+        console.log("Detected development store, retrying with test charge.");
+        await billing.require({
+          plans: [MONTHLY_PLAN],
+          isTest: true,
+          onFailure: async () =>
+            billing.request({
+              plan: MONTHLY_PLAN,
+              isTest: true,
+            }),
+        });
+        return { success: true };
       }
 
+      console.error("Billing API Error:", error.message || error);
       return { error: "settings_billing_error", details: error.message || "Unknown error" };
     }
   }
