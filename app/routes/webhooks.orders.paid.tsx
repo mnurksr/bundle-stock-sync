@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
-import { adjustInventory, getLocations, getInventoryLocations } from "../services/inventory.server";
+import { adjustInventory, getLocations, getInventoryLocations, getInventoryItemId } from "../services/inventory.server";
 import { checkQuota, incrementSyncCount } from "../services/quota.server";
 import { createSyncLog, updateSyncLog, getSyncLogByIdempotencyKey } from "../services/syncLog.server";
 import { v4 as uuidv4 } from "uuid";
@@ -97,6 +97,14 @@ async function processOrderPaid(shopDomain: string, payload: any, session: any) 
 
   const admin = { graphql: adminGraphql };
 
+  // Get fallback locations
+  let fallbackLocations: Array<{ id: string; name: string }> = [];
+  try {
+    fallbackLocations = await getLocations(admin as any);
+  } catch (error) {
+    console.log(`[Error] Failed to get fallback locations for ${shopDomain}:`, error);
+  }
+
 
   console.log(`Processing ${lineItems.length} line items for order ${orderId}`);
 
@@ -115,6 +123,26 @@ async function processOrderPaid(shopDomain: string, payload: any, session: any) 
     }
 
     console.log(`Rule matched! Bundle: ${rule.bundleProductTitle}, Items: ${rule.items.length}`);
+
+    // Determine target location for the entire bundle operation
+    let targetLocationId = fallbackLocations[0]?.id;
+    try {
+      const bundleInventoryItemId = await getInventoryItemId(admin as any, gidVariantId);
+      if (bundleInventoryItemId) {
+        const bundleLocations = await getInventoryLocations(admin as any, bundleInventoryItemId);
+        if (bundleLocations.length > 0) {
+          const stockedLocation = bundleLocations.find(l => l.available > 0) || bundleLocations[0];
+          targetLocationId = stockedLocation.locationId;
+        }
+      }
+    } catch (e) {
+      console.log(`[Warning] Could not fetch bundle locations, using fallback.`, e);
+    }
+
+    if (!targetLocationId) {
+      console.log(`[Error] No target location could be determined for ${shopDomain}`);
+      continue;
+    }
 
     const quantitySold = lineItem.quantity || 1;
     const idempotencyKey = `order-${payload.id}-line-${lineItem.id}-rule-${rule.id}`;
@@ -171,24 +199,14 @@ async function processOrderPaid(shopDomain: string, payload: any, session: any) 
       for (const item of rule.items) {
         const totalAdjustment = quantitySold * item.quantity;
         
-        // Find best location to deduct from (where the item is actually stocked)
-        const itemLocations = await getInventoryLocations(admin as any, item.baseInventoryItemId);
-        
-        if (itemLocations.length === 0) {
-          throw new Error(`Inventory item is not stocked at any location.`);
-        }
-        
-        // Prefer location with enough stock, otherwise just pick the first one where it is stocked
-        let targetLocation = itemLocations.find(l => l.available >= totalAdjustment) || itemLocations[0];
-
         await adjustInventory(
           admin as any,
           item.baseInventoryItemId,
-          targetLocation.locationId,
+          targetLocationId,
           -totalAdjustment, // Negative delta to decrease stock
           "correction"
         );
-        console.log(`✅ Stock adjusted for ${shopDomain}: ${rule.bundleProductTitle} x${quantitySold} → ${item.baseProductTitle} -${totalAdjustment} at ${targetLocation.locationId}`);
+        console.log(`✅ Stock adjusted for ${shopDomain}: ${rule.bundleProductTitle} x${quantitySold} → ${item.baseProductTitle} -${totalAdjustment} at ${targetLocationId}`);
       }
 
       // Update sync log to success
