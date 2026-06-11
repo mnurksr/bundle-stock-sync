@@ -44,7 +44,7 @@ model Shop {
   syncCount     Int       @default(0) // Current period sync count
   syncResetDate DateTime? // When the quota was last reset
   isActive      Boolean   @default(true)
-  autoAdjustBundleStock Boolean @default(false) // Auto-adjust bundle stock when base item stock changes
+  autoAdjustBundleStock Boolean @default(true) // Auto-adjust bundle stock when base item stock changes
   installedAt   DateTime  @default(now())
   uninstalledAt DateTime?
   createdAt     DateTime  @default(now())
