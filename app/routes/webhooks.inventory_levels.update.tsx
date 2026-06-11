@@ -40,17 +40,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return new Response();
   }
 
-  // LOG: Webhook Received
-  await createSyncLog({
-    shopId: shop.id,
-    orderId: `webhook-trace-${Date.now()}`,
-    orderName: "Diagnostic: Webhook Received",
-    bundleVariantId: "trace",
-    status: "success",
-    errorMessage: `Received inventory_item_id: ${inventoryItemIdNumber}, location: ${locationIdNumber}, available: ${newAvailableCount}`,
-    idempotencyKey: `trace-1-${Date.now()}`
-  });
-
   const rules = await db.bundleRule.findMany({
     where: {
       shopId: shop.id,
@@ -64,29 +53,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   });
 
   if (rules.length === 0) {
-    // LOG: No Rules Found
-    await createSyncLog({
-      shopId: shop.id,
-      orderId: `webhook-trace-${Date.now()}`,
-      orderName: "Diagnostic: No Rules Found",
-      bundleVariantId: "trace",
-      status: "success",
-      errorMessage: `Could not find any bundle rule containing inventory_item_id: ${gidInventoryItemId}`,
-      idempotencyKey: `trace-2-${Date.now()}`
-    });
     return new Response();
   }
-  
-  // LOG: Rules Found
-  await createSyncLog({
-    shopId: shop.id,
-    orderId: `webhook-trace-${Date.now()}`,
-    orderName: "Diagnostic: Rules Found",
-    bundleVariantId: "trace",
-    status: "success",
-    errorMessage: `Found ${rules.length} rule(s) for this item. Proceeding to calculate stock.`,
-    idempotencyKey: `trace-3-${Date.now()}`
-  });
 
   // 3. Update the stock for each connected bundle product
   for (const rule of rules) {
@@ -122,16 +90,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           const stockData = await stockResponse.json();
           stockForThisItem = stockData.data?.inventoryItem?.inventoryLevel?.quantities?.[0]?.quantity || 0;
         } catch (error) {
-          await createSyncLog({
-            shopId: shop.id,
-            bundleRuleId: rule.id,
-            orderId: `webhook-trace-${Date.now()}`,
-            orderName: "Diagnostic: Sibling Fetch Crash",
-            bundleVariantId: rule.bundleVariantId,
-            status: "failed",
-            errorMessage: `Failed to fetch sibling stock: ${error instanceof Error ? error.message : JSON.stringify(error)}`,
-            idempotencyKey: `trace-sibling-crash-${item.id}-${Date.now()}`
-          });
           console.error(`Failed to fetch stock for sibling item ${item.baseProductTitle}:`, error);
           stockForThisItem = 0; // Assume 0 if fetch fails to prevent overselling
         }
@@ -164,30 +122,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const bundleVariantData = await bundleVariantResponse.json();
       const bundleInventoryItemId = bundleVariantData.data?.productVariant?.inventoryItem?.id;
 
-      if (!bundleInventoryItemId) {
-        await createSyncLog({
-          shopId: shop.id,
-          bundleRuleId: rule.id,
-          orderId: `webhook-trace-${Date.now()}`,
-          orderName: "Diagnostic: Bundle Inventory Item Missing",
-          bundleVariantId: rule.bundleVariantId,
-          status: "failed",
-          errorMessage: `Could not find inventory item ID for bundle variant: ${rule.bundleVariantId}. Check if the variant was deleted.`,
-          idempotencyKey: `trace-missing-inv-${rule.id}-${Date.now()}`
-        });
-        continue;
-      }
-
-      await createSyncLog({
-        shopId: shop.id,
-        bundleRuleId: rule.id,
-        orderId: `webhook-trace-${Date.now()}`,
-        orderName: "Diagnostic: About to compare stocks",
-        bundleVariantId: rule.bundleVariantId,
-        status: "success",
-        errorMessage: `Calculated new max bundles: ${newBundleStock}. Proceeding to fetch current bundle stock...`,
-        idempotencyKey: `trace-compare-${rule.id}-${Date.now()}`
-      });
+      if (!bundleInventoryItemId) continue;
 
       // Check current bundle stock at this location to prevent ECHO logs
       const bundleInventoryResponse = await admin.graphql(
@@ -213,29 +148,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const currentBundleStock = bundleInventoryData.data?.inventoryItem?.inventoryLevel?.quantities?.[0]?.quantity || 0;
 
       if (currentBundleStock === newBundleStock) {
-        await createSyncLog({
-          shopId: shop.id,
-          bundleRuleId: rule.id,
-          orderId: `webhook-trace-${Date.now()}`,
-          orderName: "Diagnostic: Echo Prevented",
-          bundleVariantId: rule.bundleVariantId,
-          status: "success",
-          errorMessage: `Calculated new stock is ${newBundleStock}, and current stock is already ${currentBundleStock}. Skipping API call.`,
-          idempotencyKey: `trace-echo-${rule.id}-${Date.now()}`
-        });
         continue;
       }
-
-      await createSyncLog({
-        shopId: shop.id,
-        bundleRuleId: rule.id,
-        orderId: `webhook-trace-${Date.now()}`,
-        orderName: "Diagnostic: Updating Stock",
-        bundleVariantId: rule.bundleVariantId,
-        status: "success",
-        errorMessage: `Current stock is ${currentBundleStock}, new stock should be ${newBundleStock}. Executing mutation...`,
-        idempotencyKey: `trace-mutate-${rule.id}-${Date.now()}`
-      });
 
       const delta = newBundleStock - currentBundleStock;
 
@@ -294,51 +208,26 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           bundleVariantId: rule.bundleVariantId,
           itemsSummary,
           status: "failed",
-          errorMessage: `Error: ${JSON.stringify(setStockData.data.inventorySetQuantities.userErrors)}`,
+          errorMessage: `Error: ${JSON.stringify(setStockData.data.inventoryAdjustQuantities.userErrors)}`,
           idempotencyKey: `up-sync-${rule.id}-${payload.updated_at || Date.now()}`
         });
 
       } else {
         console.log(`Successfully synced UP bundle stock for rule ${rule.id} to ${newBundleStock} (Available)`);
         
-        // --- VISUAL ECHO PREVENTER ---
-        const fifteenSecondsAgo = new Date(Date.now() - 15 * 1000);
-        const recentOrderLog = await db.syncLog.findFirst({
-          where: {
-            shopId: shop.id,
-            bundleRuleId: rule.id,
-            orderName: { notIn: ["Base Stock Changed", "Auto Up-Sync", "Up-Sync Error"] },
-            createdAt: { gte: fifteenSecondsAgo }
-          }
+        await createSyncLog({
+          shopId: shop.id,
+          orderId: `inventory-${payload.updated_at || Date.now()}`,
+          orderName: "Base Stock Changed",
+          bundleRuleId: rule.id,
+          bundleVariantId: rule.bundleVariantId,
+          itemsSummary,
+          status: "success",
+          errorMessage: `Bundle stock updated to: ${newBundleStock}`,
+          idempotencyKey: `up-sync-${rule.id}-${payload.updated_at || Date.now()}`
         });
-
-        if (recentOrderLog) {
-          console.log(`[Up-Sync] Suppressing log because Order ${recentOrderLog.orderName} just occurred.`);
-        } else {
-          await createSyncLog({
-            shopId: shop.id,
-            orderId: `inventory-${payload.updated_at || Date.now()}`,
-            orderName: "Base Stock Changed",
-            bundleRuleId: rule.id,
-            bundleVariantId: rule.bundleVariantId,
-            itemsSummary,
-            status: "success",
-            errorMessage: `Bundle stock updated to: ${newBundleStock}`,
-            idempotencyKey: `up-sync-${rule.id}-${payload.updated_at || Date.now()}`
-          });
-        }
       }
     } catch (error) {
-      await createSyncLog({
-        shopId: shop.id,
-        bundleRuleId: rule.id,
-        orderId: `webhook-trace-${Date.now()}`,
-        orderName: "Diagnostic: Critical Crash",
-        bundleVariantId: rule.bundleVariantId,
-        status: "failed",
-        errorMessage: `CRASH in webhook: ${error instanceof Error ? error.message : JSON.stringify(error)}`,
-        idempotencyKey: `trace-crash-${rule.id}-${Date.now()}`
-      });
       console.error(`Error processing up-sync for rule ${rule.id}:`, error);
     }
   }
