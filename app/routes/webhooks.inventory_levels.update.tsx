@@ -263,6 +263,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                   inventoryItemId: bundleInventoryItemId,
                   locationId: gidLocationId,
                   delta: delta,
+                  changeFromQuantity: currentBundleStock,
                 },
               ],
             },
