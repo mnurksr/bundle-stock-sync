@@ -122,6 +122,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           const stockData = await stockResponse.json();
           stockForThisItem = stockData.data?.inventoryItem?.inventoryLevel?.quantities?.[0]?.quantity || 0;
         } catch (error) {
+          await createSyncLog({
+            shopId: shop.id,
+            bundleRuleId: rule.id,
+            orderId: `webhook-trace-${Date.now()}`,
+            orderName: "Diagnostic: Sibling Fetch Crash",
+            bundleVariantId: rule.bundleVariantId,
+            status: "failed",
+            errorMessage: `Failed to fetch sibling stock: ${error instanceof Error ? error.message : JSON.stringify(error)}`,
+            idempotencyKey: `trace-sibling-crash-${item.id}-${Date.now()}`
+          });
           console.error(`Failed to fetch stock for sibling item ${item.baseProductTitle}:`, error);
           stockForThisItem = 0; // Assume 0 if fetch fails to prevent overselling
         }
@@ -154,7 +164,30 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const bundleVariantData = await bundleVariantResponse.json();
       const bundleInventoryItemId = bundleVariantData.data?.productVariant?.inventoryItem?.id;
 
-      if (!bundleInventoryItemId) continue;
+      if (!bundleInventoryItemId) {
+        await createSyncLog({
+          shopId: shop.id,
+          bundleRuleId: rule.id,
+          orderId: `webhook-trace-${Date.now()}`,
+          orderName: "Diagnostic: Bundle Inventory Item Missing",
+          bundleVariantId: rule.bundleVariantId,
+          status: "failed",
+          errorMessage: `Could not find inventory item ID for bundle variant: ${rule.bundleVariantId}. Check if the variant was deleted.`,
+          idempotencyKey: `trace-missing-inv-${rule.id}-${Date.now()}`
+        });
+        continue;
+      }
+
+      await createSyncLog({
+        shopId: shop.id,
+        bundleRuleId: rule.id,
+        orderId: `webhook-trace-${Date.now()}`,
+        orderName: "Diagnostic: About to compare stocks",
+        bundleVariantId: rule.bundleVariantId,
+        status: "success",
+        errorMessage: `Calculated new max bundles: ${newBundleStock}. Proceeding to fetch current bundle stock...`,
+        idempotencyKey: `trace-compare-${rule.id}-${Date.now()}`
+      });
 
       // Check current bundle stock at this location to prevent ECHO logs
       const bundleInventoryResponse = await admin.graphql(
@@ -187,11 +220,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           orderName: "Diagnostic: Echo Prevented",
           bundleVariantId: rule.bundleVariantId,
           status: "success",
-          errorMessage: `Calculated new stock is ${newBundleStock}, but current stock is already ${newBundleStock}. Skipping API call.`,
+          errorMessage: `Calculated new stock is ${newBundleStock}, and current stock is already ${currentBundleStock}. Skipping API call.`,
           idempotencyKey: `trace-echo-${rule.id}-${Date.now()}`
         });
         continue;
       }
+
+      await createSyncLog({
+        shopId: shop.id,
+        bundleRuleId: rule.id,
+        orderId: `webhook-trace-${Date.now()}`,
+        orderName: "Diagnostic: Updating Stock",
+        bundleVariantId: rule.bundleVariantId,
+        status: "success",
+        errorMessage: `Current stock is ${currentBundleStock}, new stock should be ${newBundleStock}. Executing mutation...`,
+        idempotencyKey: `trace-mutate-${rule.id}-${Date.now()}`
+      });
 
       // SET the absolute stock for the bundle product at the same location targeting "available" directly
       const setStockResponse = await admin.graphql(
@@ -282,6 +326,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         }
       }
     } catch (error) {
+      await createSyncLog({
+        shopId: shop.id,
+        bundleRuleId: rule.id,
+        orderId: `webhook-trace-${Date.now()}`,
+        orderName: "Diagnostic: Critical Crash",
+        bundleVariantId: rule.bundleVariantId,
+        status: "failed",
+        errorMessage: `CRASH in webhook: ${error instanceof Error ? error.message : JSON.stringify(error)}`,
+        idempotencyKey: `trace-crash-${rule.id}-${Date.now()}`
+      });
       console.error(`Error processing up-sync for rule ${rule.id}:`, error);
     }
   }
