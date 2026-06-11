@@ -60,6 +60,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     shop = await db.shop.create({ data: { shopDomain } });
   }
 
+  // Enforce Free Plan Limits (max 3 rules)
+  if (shop.plan === "free") {
+    const currentRuleCount = await db.bundleRule.count({ where: { shopId: shop.id } });
+    if (currentRuleCount >= 3) {
+      return { error: "Free plan limit reached. You can only create up to 3 rules. Please upgrade to Pro." };
+    }
+  }
+
   // Check if rule already exists for this variant
   const existingRule = await db.bundleRule.findUnique({
     where: {

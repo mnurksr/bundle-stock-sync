@@ -182,6 +182,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   return {
     rules: rulesWithImages,
+    plan: shop.plan,
   };
 };
 
@@ -222,7 +223,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function BundleRulesPage() {
-  const { rules } = useLoaderData<typeof loader>();
+  const { rules, plan } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -270,7 +271,16 @@ export default function BundleRulesPage() {
   return (
     <Page>
       <TitleBar title={t("rules_title")}>
-        <button variant="primary" onClick={() => navigate("/app/rules/new")}>
+        <button 
+          variant="primary" 
+          onClick={() => {
+            if (plan === "free" && rules.length >= 3) {
+              shopify.toast.show("Free plan limit reached (3 rules). Please upgrade to Pro.");
+            } else {
+              navigate("/app/rules/new");
+            }
+          }}
+        >
           {t("rules_add")}
         </button>
       </TitleBar>
@@ -298,8 +308,14 @@ export default function BundleRulesPage() {
               <EmptyState
                 heading={t("rules_empty_title")}
                 action={{
-                  content: t("rules_add"),
-                  url: "/app/rules/new",
+                  content: t("rules_btn_create"),
+                  onAction: () => {
+                    if (plan === "free" && rules.length >= 3) {
+                      shopify.toast.show("Free plan limit reached (3 rules). Please upgrade to Pro.");
+                    } else {
+                      navigate("/app/rules/new");
+                    }
+                  },
                 }}
                 image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
               >

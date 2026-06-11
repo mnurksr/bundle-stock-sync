@@ -148,7 +148,7 @@ const translations = {
     settings_save: "Save Settings",
     settings_billing_error: "Billing Error: Something went wrong. Please try again or contact support.",
     settings_plan_free: "Free",
-    settings_plan_pro: "Pro — $3/mo",
+    settings_plan_pro: "Pro — $7.99/mo",
     settings_plan_monthly_syncs: "Monthly syncs used",
     settings_plan_unlimited: " (unlimited)",
     settings_plan_active_rules: "Active bundle rules",
