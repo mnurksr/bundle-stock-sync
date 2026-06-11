@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
-import { adjustInventory, getLocations } from "../services/inventory.server";
+import { adjustInventory, getLocations, getInventoryLocations } from "../services/inventory.server";
 import { checkQuota, incrementSyncCount } from "../services/quota.server";
 import { createSyncLog, updateSyncLog, getSyncLogByIdempotencyKey } from "../services/syncLog.server";
 import { v4 as uuidv4 } from "uuid";
@@ -97,19 +97,6 @@ async function processOrderPaid(shopDomain: string, payload: any, session: any) 
 
   const admin = { graphql: adminGraphql };
 
-  // Get locations for inventory adjustment
-  let locations: Array<{ id: string; name: string }> = [];
-  try {
-    locations = await getLocations(admin as any);
-  } catch (error) {
-    console.log(`[Error] Failed to get locations for ${shopDomain}:`, error);
-    return;
-  }
-
-  if (locations.length === 0) {
-    console.log(`[Error] No locations found for ${shopDomain}`);
-    return;
-  }
 
   console.log(`Processing ${lineItems.length} line items for order ${orderId}`);
 
@@ -180,19 +167,28 @@ async function processOrderPaid(shopDomain: string, payload: any, session: any) 
     });
 
     try {
-      const primaryLocation = locations[0];
-
       // Adjust inventory for each base item in the bundle
       for (const item of rule.items) {
         const totalAdjustment = quantitySold * item.quantity;
+        
+        // Find best location to deduct from (where the item is actually stocked)
+        const itemLocations = await getInventoryLocations(admin as any, item.baseInventoryItemId);
+        
+        if (itemLocations.length === 0) {
+          throw new Error(`Inventory item is not stocked at any location.`);
+        }
+        
+        // Prefer location with enough stock, otherwise just pick the first one where it is stocked
+        let targetLocation = itemLocations.find(l => l.available >= totalAdjustment) || itemLocations[0];
+
         await adjustInventory(
           admin as any,
           item.baseInventoryItemId,
-          primaryLocation.id,
+          targetLocation.locationId,
           -totalAdjustment, // Negative delta to decrease stock
           "correction"
         );
-        console.log(`✅ Stock adjusted for ${shopDomain}: ${rule.bundleProductTitle} x${quantitySold} → ${item.baseProductTitle} -${totalAdjustment}`);
+        console.log(`✅ Stock adjusted for ${shopDomain}: ${rule.bundleProductTitle} x${quantitySold} → ${item.baseProductTitle} -${totalAdjustment} at ${targetLocation.locationId}`);
       }
 
       // Update sync log to success

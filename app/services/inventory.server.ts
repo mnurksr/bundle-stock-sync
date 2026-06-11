@@ -147,6 +147,43 @@ export async function getInventoryLevel(
   return null;
 }
 
+export async function getInventoryLocations(
+  admin: AdminApiContext,
+  inventoryItemId: string
+): Promise<Array<{ locationId: string; available: number }>> {
+  const response = await admin.graphql(
+    `#graphql
+    query getInventoryLocations($inventoryItemId: ID!) {
+      inventoryItem(id: $inventoryItemId) {
+        inventoryLevels(first: 10) {
+          edges {
+            node {
+              location {
+                id
+              }
+              quantities(names: ["available"]) {
+                quantity
+              }
+            }
+          }
+        }
+      }
+    }`,
+    { variables: { inventoryItemId } }
+  );
+
+  const result = await response.json();
+  const levels = result.data?.inventoryItem?.inventoryLevels?.edges || [];
+  
+  return levels.map((edge: any) => {
+    const available = edge.node.quantities?.find((q: any) => q.name === "available");
+    return {
+      locationId: edge.node.location.id,
+      available: available?.quantity || 0
+    };
+  });
+}
+
 export async function getProductVariantDetails(admin: AdminApiContext, variantId: string) {
   const response = await admin.graphql(
     `#graphql
