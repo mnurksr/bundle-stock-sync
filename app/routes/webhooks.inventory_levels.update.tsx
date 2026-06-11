@@ -239,11 +239,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       const delta = newBundleStock - currentBundleStock;
 
-      // SET the absolute stock by using inventoryAdjustQuantities with a calculated delta
       const setStockResponse = await admin.graphql(
         `#graphql
-        mutation inventoryAdjustQuantities($input: InventoryAdjustQuantitiesInput!) {
-          inventoryAdjustQuantities(input: $input) {
+        mutation inventoryAdjustQuantities($input: InventoryAdjustQuantitiesInput!, $key: String!) {
+          inventoryAdjustQuantities(input: $input) @idempotent(key: $key) {
             inventoryAdjustmentGroup {
               createdAt
             }
@@ -255,6 +254,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         }`,
         {
           variables: {
+            key: `sync-${rule.id}-${Date.now()}`,
             input: {
               name: "available",
               reason: "correction",
