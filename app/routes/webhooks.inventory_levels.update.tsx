@@ -237,11 +237,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         idempotencyKey: `trace-mutate-${rule.id}-${Date.now()}`
       });
 
-      // SET the absolute stock for the bundle product at the same location targeting "available" directly
+      const delta = newBundleStock - currentBundleStock;
+
+      // SET the absolute stock by using inventoryAdjustQuantities with a calculated delta
       const setStockResponse = await admin.graphql(
         `#graphql
-        mutation inventorySetQuantities($input: InventorySetQuantitiesInput!) {
-          inventorySetQuantities(input: $input) {
+        mutation inventoryAdjustQuantities($input: InventoryAdjustQuantitiesInput!) {
+          inventoryAdjustQuantities(input: $input) {
             inventoryAdjustmentGroup {
               createdAt
             }
@@ -256,12 +258,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             input: {
               name: "available",
               reason: "correction",
-              quantities: [
+              changes: [
                 {
                   inventoryItemId: bundleInventoryItemId,
                   locationId: gidLocationId,
-                  quantity: newBundleStock,
-                  compareQuantity: currentBundleStock,
+                  delta: delta,
                 },
               ],
             },
@@ -279,9 +280,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         totalAdjustment: 0
       }));
       const itemsSummary = JSON.stringify(itemsSummaryArray);
-      
-      if (setStockData.data?.inventorySetQuantities?.userErrors?.length > 0) {
-        console.error("Failed to sync up bundle stock:", setStockData.data.inventorySetQuantities.userErrors);
+      const errors = setStockData.data?.inventoryAdjustQuantities?.userErrors;
+
+      if (errors && errors.length > 0) {
+        console.error("Failed to sync up bundle stock:", setStockData.data.inventoryAdjustQuantities.userErrors);
         
         await createSyncLog({
           shopId: shop.id,
