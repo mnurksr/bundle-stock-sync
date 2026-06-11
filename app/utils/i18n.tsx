@@ -6,7 +6,7 @@ const translations = {
   en: {
     // Nav
     nav_dashboard: "Dashboard",
-    nav_rules: "Bundles",
+    nav_rules: "Bundle",
     nav_logs: "Sync Logs",
     nav_settings: "Settings",
 
@@ -42,7 +42,7 @@ const translations = {
     status_pending: "Pending",
     
     // Rules
-    rules_title: "Bundles",
+    rules_title: "Bundle",
     rules_desc: "Manage your bundle inventory synchronization rules here.",
     rules_create: "Create New Rule",
     rules_add: "Add Rule",
@@ -173,7 +173,7 @@ const translations = {
   },
   tr: {
     nav_dashboard: "Panel",
-    nav_rules: "Paketler",
+    nav_rules: "Paket Kuralları",
     nav_logs: "Eşitleme Kayıtları",
     nav_settings: "Ayarlar",
 
@@ -206,7 +206,7 @@ const translations = {
     status_skipped: "Atlandı",
     status_pending: "Bekliyor",
     
-    rules_title: "Paketler",
+    rules_title: "Paket Kuralları",
     rules_desc: "Paket stok eşitleme kurallarınızı buradan yönetin.",
     rules_create: "Yeni Kural Oluştur",
     rules_col_bundle: "Paket Ürün",
