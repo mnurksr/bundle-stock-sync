@@ -5,7 +5,7 @@ import { AppProvider } from "@shopify/shopify-app-remix/react";
 import { NavMenu } from "@shopify/app-bridge-react";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 
-import { authenticate } from "../shopify.server";
+import { authenticate, registerWebhooks } from "../shopify.server";
 import db from "../db.server";
 import { LanguageProvider, useTranslation } from "../utils/i18n";
 
@@ -13,6 +13,14 @@ export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin, redirect } = await authenticate.admin(request);
+  
+  // Force register webhooks so Shopify updates its URL to the current server
+  try {
+    await registerWebhooks({ session });
+    console.log("[Webhooks] Successfully registered/updated webhooks for", session.shop);
+  } catch (error) {
+    console.error("[Webhooks] Failed to register webhooks:", error);
+  }
   
   // Enforce plan selection on first load (Managed Pricing workflow)
   try {
