@@ -76,10 +76,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       orderId: log.orderId,
       orderName: log.orderName,
       bundleProductTitle: log.bundleRule?.bundleProductTitle || "Deleted Rule",
-      baseProductTitle: log.bundleRule?.baseProductTitle || "Deleted Rule",
-      quantitySold: log.quantitySold,
-      multiplier: log.multiplier,
-      totalAdjustment: log.totalAdjustment,
+      itemsSummary: log.itemsSummary,
       status: log.status,
       errorMessage: log.errorMessage,
       createdAt: log.createdAt.toISOString(),
@@ -164,13 +161,16 @@ export default function SyncLogsPage() {
     // Format Event Name
     const eventName = isUpSync ? t("logs_event_up_sync") : t("logs_event_order", { orderName: log.orderName });
     
-    // Format Action Description
-    let actionDescription = "";
-    if (isUpSync) {
-      actionDescription = t("logs_action_up_sync", { adjustment: log.totalAdjustment, quantity: log.quantitySold });
-    } else {
-      actionDescription = t("logs_action_down_sync", { adjustment: log.totalAdjustment, quantity: log.quantitySold });
-    }
+    let summaryData: any[] = [];
+    try {
+      summaryData = JSON.parse(log.itemsSummary || "[]");
+    } catch(e) {}
+    
+    const itemsDescription = summaryData.map((item: any, i: number) => (
+      <Text key={i} as="p" variant="bodySm" tone="critical">
+        {item.title}: -{item.totalAdjustment} (Sold {item.quantitySold} x {item.multiplier})
+      </Text>
+    ));
 
     return (
       <IndexTable.Row id={log.id} key={log.id} position={index}>
@@ -185,14 +185,16 @@ export default function SyncLogsPage() {
           </Text>
         </IndexTable.Cell>
         <IndexTable.Cell>
-          <Text as="span" variant="bodyMd">
-            {log.bundleProductTitle} ↔ {log.baseProductTitle}
+          <Text as="span" variant="bodyMd" fontWeight="semibold">
+            {log.bundleProductTitle}
           </Text>
         </IndexTable.Cell>
         <IndexTable.Cell>
-          <Text as="span" tone={isUpSync ? "success" : "critical"}>
-            {actionDescription}
-          </Text>
+           {isUpSync ? (
+             <Text as="span" tone="success">{log.errorMessage || "Stock recalculated"}</Text>
+           ) : (
+             <BlockStack gap="100">{itemsDescription}</BlockStack>
+           )}
         </IndexTable.Cell>
         <IndexTable.Cell>{statusBadge(log.status)}</IndexTable.Cell>
       </IndexTable.Row>

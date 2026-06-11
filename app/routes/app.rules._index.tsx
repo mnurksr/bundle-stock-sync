@@ -32,6 +32,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const rules = await db.bundleRule.findMany({
     where: { shopId: shop.id },
     orderBy: { createdAt: "desc" },
+    include: { items: true },
   });
 
   return {
@@ -39,9 +40,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       id: rule.id,
       bundleProductTitle: rule.bundleProductTitle,
       bundleSku: rule.bundleSku,
-      baseProductTitle: rule.baseProductTitle,
-      baseSku: rule.baseSku,
-      multiplier: rule.multiplier,
+      items: rule.items.map(item => ({
+        id: item.id,
+        title: item.baseProductTitle,
+        sku: item.baseSku,
+        quantity: item.quantity,
+      })),
       isActive: rule.isActive,
       createdAt: rule.createdAt.toISOString(),
     })),
@@ -139,18 +143,15 @@ export default function BundleRulesPage() {
       </IndexTable.Cell>
       <IndexTable.Cell>
         <BlockStack gap="100">
-          <Text as="span" variant="bodyMd">
-            {rule.baseProductTitle}
-          </Text>
-          {rule.baseSku && (
-            <Text as="span" variant="bodySm" tone="subdued">
-              SKU: {rule.baseSku}
-            </Text>
-          )}
+          {rule.items.map((item) => (
+            <InlineStack key={item.id} gap="200" align="start">
+              <Badge tone="magic">{`×${item.quantity}`}</Badge>
+              <Text as="span" variant="bodySm">
+                {item.title} {item.sku ? `(${item.sku})` : ""}
+              </Text>
+            </InlineStack>
+          ))}
         </BlockStack>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <Badge tone="magic">{`×${rule.multiplier}`}</Badge>
       </IndexTable.Cell>
       <IndexTable.Cell>
         {rule.isActive ? (
@@ -196,8 +197,7 @@ export default function BundleRulesPage() {
                 itemCount={rules.length}
                 headings={[
                   { title: t("rules_col_bundle") },
-                  { title: t("rules_col_base") },
-                  { title: t("rules_col_multiplier") },
+                  { title: "Included Items" },
                   { title: t("rules_col_status") },
                   { title: t("rules_col_actions") },
                 ]}

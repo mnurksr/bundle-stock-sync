@@ -13,7 +13,6 @@ import {
   Button,
   Banner,
   Thumbnail,
-  Box,
   List,
 } from "@shopify/polaris";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
@@ -36,55 +35,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const bundleVariantId = formData.get("bundleVariantId") as string;
   const bundleProductTitle = formData.get("bundleProductTitle") as string;
   const bundleSku = (formData.get("bundleSku") as string) || null;
-  const baseProductId = formData.get("baseProductId") as string;
-  const baseVariantId = formData.get("baseVariantId") as string;
-  const baseProductTitle = formData.get("baseProductTitle") as string;
-  const baseSku = (formData.get("baseSku") as string) || null;
-  const multiplier = parseInt(formData.get("multiplier") as string, 10) || 1;
+  const itemsJson = formData.get("items") as string;
 
-  // Validate
-  if (!bundleVariantId || !baseVariantId) {
-    return {
-      error: "Please select both a bundle product and a base product.",
-    };
+  if (!bundleVariantId || !itemsJson) {
+    return { error: "Please select a bundle product and at least one base item." };
   }
 
-  if (multiplier < 1) {
-    return { error: "Multiplier must be at least 1." };
-  }
-
-  // Get inventoryItemId from Shopify API
-  let inventoryItemId: string | null = null;
+  let items: any[] = [];
   try {
-    inventoryItemId = await getInventoryItemId(admin, baseVariantId);
-  } catch (error: any) {
-    console.error("GraphQL Error:", error);
-    let errorStr = "Unknown error";
-    if (error instanceof Error) {
-      errorStr = error.message;
-    } else if (error && typeof error.status === 'number') {
-      // It's likely a Response object
-      errorStr = `HTTP ${error.status} ${error.statusText}`;
-      try {
-        const text = await (error as Response).clone().text();
-        errorStr += ` - ${text}`;
-      } catch (e) {}
-    } else {
-      try {
-        errorStr = JSON.stringify(error);
-      } catch (e) {}
-    }
-
-    return {
-      error: `GraphQL Exception: ${errorStr} (Variant ID: ${baseVariantId})`,
-    };
+    items = JSON.parse(itemsJson);
+  } catch (e) {
+    return { error: "Invalid items data." };
   }
 
-  if (!inventoryItemId) {
-    return {
-      error:
-        "Could not find inventory item for the base product. Make sure the product has inventory tracking enabled.",
-    };
+  if (items.length === 0) {
+    return { error: "You must add at least one base product to the bundle." };
   }
 
   // Ensure shop exists
@@ -105,9 +70,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (existingRule) {
     return {
-      error:
-        "A bundle rule already exists for this product variant. Please edit the existing rule instead.",
+      error: "A bundle rule already exists for this product variant. Please edit the existing rule instead.",
     };
+  }
+
+  // Resolve inventory item IDs for all items
+  const resolvedItems = [];
+  for (const item of items) {
+    try {
+      const inventoryItemId = await getInventoryItemId(admin, item.baseVariantId);
+      if (!inventoryItemId) {
+        return { error: `Could not find inventory item for ${item.baseProductTitle}. Ensure inventory tracking is enabled.` };
+      }
+      resolvedItems.push({ ...item, baseInventoryItemId: inventoryItemId });
+    } catch (error: any) {
+      return { error: `GraphQL Error fetching inventory item for ${item.baseProductTitle}: ${error.message}` };
+    }
   }
 
   // Create bundle rule
@@ -118,12 +96,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       bundleVariantId,
       bundleProductTitle,
       bundleSku,
-      baseProductId,
-      baseVariantId,
-      baseProductTitle,
-      baseSku,
-      baseInventoryItemId: inventoryItemId,
-      multiplier,
+      items: {
+        create: resolvedItems.map(item => ({
+          baseProductId: item.baseProductId,
+          baseVariantId: item.baseVariantId,
+          baseProductTitle: item.baseProductTitle,
+          baseSku: item.baseSku,
+          baseInventoryItemId: item.baseInventoryItemId,
+          quantity: item.quantity,
+        })),
+      },
     },
   });
 
@@ -145,18 +127,18 @@ interface SelectedProduct {
   }>;
 }
 
+interface BundleItem extends SelectedProduct {
+  quantity: number;
+}
+
 export default function NewBundleRulePage() {
   const actionData = useActionData<typeof action>();
-  const navigate = useNavigate();
   const shopify = useAppBridge();
   const submit = useSubmit();
   const { t } = useTranslation();
 
-  const [bundleProduct, setBundleProduct] = useState<SelectedProduct | null>(
-    null
-  );
-  const [baseProduct, setBaseProduct] = useState<SelectedProduct | null>(null);
-  const [multiplier, setMultiplier] = useState("5");
+  const [bundleProduct, setBundleProduct] = useState<SelectedProduct | null>(null);
+  const [items, setItems] = useState<BundleItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
   const selectBundleProduct = useCallback(async () => {
@@ -183,16 +165,15 @@ export default function NewBundleRulePage() {
     }
   }, [shopify]);
 
-  const selectBaseProduct = useCallback(async () => {
+  const addBaseProduct = useCallback(async () => {
     const selected = await shopify.resourcePicker({
       type: "product",
-      multiple: false,
-      action: "select",
+      multiple: true,
+      action: "add",
     });
 
     if (selected && selected.length > 0) {
-      const product = selected[0];
-      setBaseProduct({
+      const newItems = selected.map((product: any) => ({
         id: product.id,
         title: product.title,
         variants: product.variants.map((v: any) => ({
@@ -203,47 +184,71 @@ export default function NewBundleRulePage() {
           inventoryQuantity: v.inventoryQuantity || 0,
         })),
         images: product.images,
+        quantity: 1, // default quantity
+      }));
+
+      setItems((prev) => {
+        const combined = [...prev];
+        for (const newItem of newItems) {
+          if (!combined.find((i) => i.variants[0].id === newItem.variants[0].id)) {
+            combined.push(newItem);
+          }
+        }
+        return combined;
       });
     }
   }, [shopify]);
 
+  const updateItemQuantity = (variantId: string, quantityStr: string) => {
+    const qty = parseInt(quantityStr, 10) || 1;
+    setItems((prev) => prev.map((item) => (item.variants[0].id === variantId ? { ...item, quantity: qty } : item)));
+  };
+
+  const removeItem = (variantId: string) => {
+    setItems((prev) => prev.filter((item) => item.variants[0].id !== variantId));
+  };
+
   const handleSave = useCallback(() => {
-    if (!bundleProduct || !baseProduct) return;
+    if (!bundleProduct || items.length === 0) return;
 
     setIsSaving(true);
     const bundleVariant = bundleProduct.variants[0];
-    const baseVariant = baseProduct.variants[0];
+
+    const payloadItems = items.map((item) => ({
+      baseProductId: item.id,
+      baseVariantId: item.variants[0].id,
+      baseProductTitle: item.title,
+      baseSku: item.variants[0].sku || "",
+      quantity: item.quantity,
+    }));
 
     const formData = new FormData();
     formData.append("bundleProductId", bundleProduct.id);
     formData.append("bundleVariantId", bundleVariant.id);
     formData.append("bundleProductTitle", bundleProduct.title);
     formData.append("bundleSku", bundleVariant.sku || "");
-    formData.append("baseProductId", baseProduct.id);
-    formData.append("baseVariantId", baseVariant.id);
-    formData.append("baseProductTitle", baseProduct.title);
-    formData.append("baseSku", baseVariant.sku || "");
-    formData.append("multiplier", multiplier);
+    formData.append("items", JSON.stringify(payloadItems));
 
     submit(formData, { method: "POST" });
-  }, [bundleProduct, baseProduct, multiplier, submit]);
+  }, [bundleProduct, items, submit]);
 
   const bundleVariant = bundleProduct?.variants[0];
-  const baseVariant = baseProduct?.variants[0];
-  const parsedMultiplier = parseInt(multiplier, 10) || 1;
   const bundleStock = bundleVariant?.inventoryQuantity ?? 0;
-  const baseStock = baseVariant?.inventoryQuantity ?? 0;
-  
-  const expectedBundleStock = Math.floor(baseStock / parsedMultiplier);
-  const oversellRisk = bundleProduct && baseProduct && (bundleStock > expectedBundleStock);
+
+  // Calculate expected maximum bundles based on the bottleneck
+  let expectedBundleStock = 0;
+  if (items.length > 0) {
+    expectedBundleStock = Math.min(
+      ...items.map((item) => Math.floor((item.variants[0]?.inventoryQuantity || 0) / Math.max(1, item.quantity)))
+    );
+  }
+
+  const oversellRisk = bundleProduct && items.length > 0 && bundleStock > expectedBundleStock;
 
   return (
-    <Page
-      backAction={{ content: t("rules_title"), url: "/app/rules" }}
-      title={t("rules_new_title")}
-    >
+    <Page backAction={{ content: t("rules_title"), url: "/app/rules" }} title={t("rules_new_title")}>
       <TitleBar title={t("rules_new_title")}>
-        <button variant="primary" onClick={handleSave} disabled={isSaving}>
+        <button variant="primary" onClick={handleSave} disabled={isSaving || !bundleProduct || items.length === 0}>
           {t("rules_btn_save")}
         </button>
       </TitleBar>
@@ -272,11 +277,7 @@ export default function NewBundleRulePage() {
                     <Card>
                       <InlineStack gap="400" align="start" blockAlign="center">
                         {bundleProduct.images?.[0] && (
-                          <Thumbnail
-                            source={bundleProduct.images[0].originalSrc}
-                            alt={bundleProduct.title}
-                            size="medium"
-                          />
+                          <Thumbnail source={bundleProduct.images[0].originalSrc} alt={bundleProduct.title} size="medium" />
                         )}
                         <BlockStack gap="100">
                           <Text as="span" variant="bodyMd" fontWeight="bold">
@@ -304,67 +305,57 @@ export default function NewBundleRulePage() {
                 </BlockStack>
               </Card>
 
-              {/* Base Product Selection */}
+              {/* Base Products Selection */}
               <Card>
                 <BlockStack gap="400">
                   <Text as="h2" variant="headingMd">
-                    {t("rules_new_base_title")}
+                    {t("rules_new_base_title") || "Items inside the bundle"}
                   </Text>
                   <Text as="p" variant="bodySm" tone="subdued">
-                    {t("rules_new_base_desc")}
+                    {t("rules_new_base_desc") || "Select the individual products that make up this bundle and define their quantities."}
                   </Text>
 
-                  {baseProduct ? (
-                    <Card>
-                      <InlineStack gap="400" align="start" blockAlign="center">
-                        {baseProduct.images?.[0] && (
-                          <Thumbnail
-                            source={baseProduct.images[0].originalSrc}
-                            alt={baseProduct.title}
-                            size="medium"
-                          />
-                        )}
-                        <BlockStack gap="100">
-                          <Text as="span" variant="bodyMd" fontWeight="bold">
-                            {baseProduct.title}
-                          </Text>
-                          {baseProduct.variants[0]?.sku && (
-                            <Text as="span" variant="bodySm" tone="subdued">
-                              SKU: {baseProduct.variants[0].sku}
-                            </Text>
-                          )}
-                          <Text as="span" variant="bodySm" tone="subdued">
-                            Variant: {baseProduct.variants[0]?.title}
-                          </Text>
-                        </BlockStack>
-                        <Button onClick={selectBaseProduct} size="slim">
-                          {t("rules_new_btn_change")}
-                        </Button>
-                      </InlineStack>
-                    </Card>
-                  ) : (
-                    <Button onClick={selectBaseProduct} variant="secondary" fullWidth>
-                      {t("rules_new_btn_select_base")}
-                    </Button>
+                  {items.length > 0 && (
+                    <BlockStack gap="300">
+                      {items.map((item) => (
+                        <Card key={item.variants[0].id}>
+                          <InlineStack gap="400" align="start" blockAlign="center" wrap={false}>
+                            {item.images?.[0] && (
+                              <Thumbnail source={item.images[0].originalSrc} alt={item.title} size="small" />
+                            )}
+                            <div style={{ flexGrow: 1 }}>
+                              <BlockStack gap="100">
+                                <Text as="span" variant="bodyMd" fontWeight="bold">
+                                  {item.title}
+                                </Text>
+                                <Text as="span" variant="bodySm" tone="subdued">
+                                  Variant: {item.variants[0]?.title}
+                                </Text>
+                              </BlockStack>
+                            </div>
+                            <div style={{ width: "80px" }}>
+                              <TextField
+                                labelHidden
+                                label="Quantity"
+                                type="number"
+                                value={String(item.quantity)}
+                                onChange={(val) => updateItemQuantity(item.variants[0].id, val)}
+                                min={1}
+                                autoComplete="off"
+                              />
+                            </div>
+                            <Button onClick={() => removeItem(item.variants[0].id)} tone="critical" variant="plain">
+                              Remove
+                            </Button>
+                          </InlineStack>
+                        </Card>
+                      ))}
+                    </BlockStack>
                   )}
-                </BlockStack>
-              </Card>
 
-              {/* Multiplier */}
-              <Card>
-                <BlockStack gap="400">
-                  <Text as="h2" variant="headingMd">
-                    {t("rules_new_multi_title")}
-                  </Text>
-                  <TextField
-                    label={t("rules_new_multi_label")}
-                    type="number"
-                    value={multiplier}
-                    onChange={setMultiplier}
-                    min={1}
-                    autoComplete="off"
-                    helpText={t("rules_new_multi_help")}
-                  />
+                  <Button onClick={addBaseProduct} variant="secondary" fullWidth>
+                    {items.length > 0 ? "Add another item" : t("rules_new_btn_select_base")}
+                  </Button>
                 </BlockStack>
               </Card>
 
@@ -372,11 +363,9 @@ export default function NewBundleRulePage() {
               {oversellRisk && (
                 <Banner tone="warning" title={t("rules_new_oversell_title")}>
                   <p>
-                    {t("rules_new_oversell_desc1", { bundleStock, baseStock, multiplier: parsedMultiplier, expected: expectedBundleStock })}
+                    {`The bundle stock (${bundleStock}) is higher than the maximum possible bundles (${expectedBundleStock}) you can make from the current base items' stock. This could lead to overselling.`}
                   </p>
-                  <p style={{ marginTop: '10px' }}>
-                    {t("rules_new_oversell_desc2")}
-                  </p>
+                  <p style={{ marginTop: "10px" }}>{t("rules_new_oversell_desc2")}</p>
                 </Banner>
               )}
             </BlockStack>
@@ -389,24 +378,11 @@ export default function NewBundleRulePage() {
                   {t("rules_new_how_title")}
                 </Text>
                 <List type="number">
-                  <List.Item>
-                    {t("rules_new_how_1")}
-                  </List.Item>
-                  <List.Item>
-                    {t("rules_new_how_2")}
-                  </List.Item>
-                  <List.Item>
-                    {t("rules_new_how_3")}
-                  </List.Item>
-                  <List.Item>
-                    {t("rules_new_how_4")}
-                  </List.Item>
+                  <List.Item>Select the Bundle/Multipack product.</List.Item>
+                  <List.Item>Add all the Base items contained in the bundle.</List.Item>
+                  <List.Item>Specify how many of each base item goes into ONE bundle.</List.Item>
+                  <List.Item>Save! Stock will sync automatically.</List.Item>
                 </List>
-                <Banner tone="info">
-                  <p>
-                    {t("rules_new_how_example")}
-                  </p>
-                </Banner>
               </BlockStack>
             </Card>
           </Layout.Section>

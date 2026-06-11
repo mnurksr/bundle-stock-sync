@@ -8,7 +8,7 @@ import {
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
 
-export const MONTHLY_PLAN = "Bundle Stock Sync Pro";
+export const MONTHLY_PLAN = "Bundle Sync Pro";
 export const FREE_PLAN_SYNC_LIMIT = 50;
 
 const shopify = shopifyApp({

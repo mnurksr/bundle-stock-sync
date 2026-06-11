@@ -90,10 +90,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       orderId: log.orderId,
       orderName: log.orderName,
       bundleProductTitle: log.bundleRule?.bundleProductTitle || "Deleted Rule",
-      baseProductTitle: log.bundleRule?.baseProductTitle || "Deleted Rule",
-      quantitySold: log.quantitySold,
-      multiplier: log.multiplier,
-      totalAdjustment: log.totalAdjustment,
+      itemsSummary: log.itemsSummary,
       status: log.status,
       createdAt: log.createdAt.toISOString(),
     })),
@@ -136,33 +133,44 @@ export default function Dashboard() {
     });
   };
 
-  const rowMarkup = recentLogs.map((log, index) => (
-    <IndexTable.Row id={log.id} key={log.id} position={index}>
-      <IndexTable.Cell>
-        <Text as="span" variant="bodyMd">
-          {formatDate(log.createdAt)}
-        </Text>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <Text as="span" variant="bodyMd" fontWeight="semibold">
-          {log.orderName}
-        </Text>
-      </IndexTable.Cell>
-      <IndexTable.Cell>{log.bundleProductTitle}</IndexTable.Cell>
-      <IndexTable.Cell>{log.baseProductTitle}</IndexTable.Cell>
-      <IndexTable.Cell>
-        <Text as="span" alignment="center">
-          {log.quantitySold}
-        </Text>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <Text as="span" fontWeight="semibold" tone="magic">
-          -{log.totalAdjustment}
-        </Text>
-      </IndexTable.Cell>
-      <IndexTable.Cell>{statusBadge(log.status)}</IndexTable.Cell>
-    </IndexTable.Row>
-  ));
+  const rowMarkup = recentLogs.map((log, index) => {
+    let summaryData: any[] = [];
+    try {
+      summaryData = JSON.parse(log.itemsSummary || "[]");
+    } catch(e) {}
+    
+    const isUpSync = log.orderName === "Base Stock Changed" || log.orderName === "Up-Sync Error";
+
+    return (
+      <IndexTable.Row id={log.id} key={log.id} position={index}>
+        <IndexTable.Cell>
+          <Text as="span" variant="bodyMd">
+            {formatDate(log.createdAt)}
+          </Text>
+        </IndexTable.Cell>
+        <IndexTable.Cell>
+          <Text as="span" variant="bodyMd" fontWeight="semibold">
+            {log.orderName}
+          </Text>
+        </IndexTable.Cell>
+        <IndexTable.Cell>{log.bundleProductTitle}</IndexTable.Cell>
+        <IndexTable.Cell>
+          <BlockStack gap="100">
+            {isUpSync ? (
+              <Text as="span" tone="success">Stock recalculated</Text>
+            ) : (
+              summaryData.map((item: any, i: number) => (
+                <Text key={i} as="span" variant="bodySm" tone="critical">
+                  {item.title}: -{item.totalAdjustment} (Sold {item.quantitySold} x {item.multiplier})
+                </Text>
+              ))
+            )}
+          </BlockStack>
+        </IndexTable.Cell>
+        <IndexTable.Cell>{statusBadge(log.status)}</IndexTable.Cell>
+      </IndexTable.Row>
+    );
+  });
 
   return (
     <Page>
@@ -290,9 +298,7 @@ export default function Dashboard() {
                   { title: t("dash_col_date") },
                   { title: t("dash_col_order") },
                   { title: t("dash_col_bundle") },
-                  { title: t("dash_col_base") },
-                  { title: t("dash_col_qty") },
-                  { title: t("dash_col_adj") },
+                  { title: "Details" },
                   { title: t("dash_col_status") },
                 ]}
                 selectable={false}

@@ -6,10 +6,7 @@ export async function createSyncLog(data: {
   orderId: string;
   orderName: string;
   bundleVariantId: string;
-  baseVariantId: string;
-  quantitySold: number;
-  multiplier: number;
-  totalAdjustment: number;
+  itemsSummary: string;
   status: string;
   errorMessage?: string;
   idempotencyKey: string;

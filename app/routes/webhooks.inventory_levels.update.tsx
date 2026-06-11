@@ -61,8 +61,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const rules = await db.bundleRule.findMany({
     where: {
       shopId: shop.id,
-      baseVariantId: variantId,
+      items: {
+        some: {
+          baseVariantId: variantId,
+        }
+      }
     },
+    include: { items: true }
   });
 
   if (rules.length === 0) {
@@ -72,7 +77,50 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   // 3. Update the stock for each connected bundle product
   for (const rule of rules) {
-    const newBundleStock = Math.max(0, Math.floor(newAvailableCount / rule.multiplier));
+    let maxPossibleBundles = Infinity;
+    
+    // Calculate bottleneck across all items
+    for (const item of rule.items) {
+      let stockForThisItem = 0;
+      
+      if (item.baseVariantId === variantId) {
+        stockForThisItem = newAvailableCount;
+      } else {
+        // Fetch from Shopify
+        try {
+          const stockResponse = await admin.graphql(
+            `#graphql
+            query getInventoryLevel($inventoryItemId: ID!, $locationId: ID!) {
+              inventoryItem(id: $inventoryItemId) {
+                inventoryLevel(locationId: $locationId) {
+                  quantities(names: ["available"]) {
+                    quantity
+                  }
+                }
+              }
+            }`,
+            {
+              variables: {
+                inventoryItemId: item.baseInventoryItemId,
+                locationId: gidLocationId,
+              },
+            }
+          );
+          const stockData = await stockResponse.json();
+          stockForThisItem = stockData.data?.inventoryItem?.inventoryLevel?.quantities?.[0]?.quantity || 0;
+        } catch (error) {
+          console.error(`Failed to fetch stock for sibling item ${item.baseProductTitle}:`, error);
+          stockForThisItem = 0; // Assume 0 if fetch fails to prevent overselling
+        }
+      }
+      
+      const possibleBundlesWithThisItem = Math.floor(stockForThisItem / item.quantity);
+      if (possibleBundlesWithThisItem < maxPossibleBundles) {
+        maxPossibleBundles = possibleBundlesWithThisItem;
+      }
+    }
+    
+    const newBundleStock = Math.max(0, maxPossibleBundles);
 
     try {
       // Find the bundle product's inventory item id
@@ -157,6 +205,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       const setStockData = await setStockResponse.json();
       
+      const itemsSummaryArray = rule.items.map(item => ({
+        baseVariantId: item.baseVariantId,
+        title: item.baseProductTitle,
+        quantitySold: 0,
+        multiplier: item.quantity,
+        totalAdjustment: 0
+      }));
+      const itemsSummary = JSON.stringify(itemsSummaryArray);
+      
       if (setStockData.data?.inventorySetQuantities?.userErrors?.length > 0) {
         console.error("Failed to sync up bundle stock:", setStockData.data.inventorySetQuantities.userErrors);
         
@@ -166,10 +223,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           orderName: "Up-Sync Error",
           bundleRuleId: rule.id,
           bundleVariantId: rule.bundleVariantId,
-          baseVariantId: rule.baseVariantId,
-          quantitySold: 0,
-          multiplier: rule.multiplier,
-          totalAdjustment: 0,
+          itemsSummary,
           status: "failed",
           errorMessage: `Error: ${JSON.stringify(setStockData.data.inventorySetQuantities.userErrors)}`,
           idempotencyKey: `up-sync-${rule.id}-${payload.updated_at || Date.now()}`
@@ -179,8 +233,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         console.log(`Successfully synced UP bundle stock for rule ${rule.id} to ${newBundleStock} (Available)`);
         
         // --- VISUAL ECHO PREVENTER ---
-        // If an order down-sync happened in the last 15 seconds, we don't need to bother the user with an "Up-Sync" log
-        // because the user already knows the order caused the stock change.
         const fifteenSecondsAgo = new Date(Date.now() - 15 * 1000);
         const recentOrderLog = await db.syncLog.findFirst({
           where: {
@@ -197,15 +249,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           await createSyncLog({
             shopId: shop.id,
             orderId: `inventory-${payload.updated_at || Date.now()}`,
-            orderName: "Base Stock Changed", // Keeping it consistent with the new UI format
+            orderName: "Base Stock Changed",
             bundleRuleId: rule.id,
             bundleVariantId: rule.bundleVariantId,
-            baseVariantId: rule.baseVariantId,
-            quantitySold: newAvailableCount, // Storing single stock here for visibility
-            multiplier: rule.multiplier,
-            totalAdjustment: newBundleStock, // Storing calculated bundle stock here for visibility
+            itemsSummary,
             status: "success",
-            errorMessage: `Base stock: ${newAvailableCount} -> Bundle stock: ${newBundleStock}`,
+            errorMessage: `Bundle stock updated to: ${newBundleStock}`,
             idempotencyKey: `up-sync-${rule.id}-${payload.updated_at || Date.now()}`
           });
         }

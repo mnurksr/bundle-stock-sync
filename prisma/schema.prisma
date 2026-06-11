@@ -53,7 +53,7 @@ model Shop {
   syncLogs    SyncLog[]
 }
 
-// ─── BundleRule — Links a bundle/multipack variant to a base/master variant ─────
+// ─── BundleRule — Links a bundle/multipack variant to multiple base/master variants ─────
 
 model BundleRule {
   id String @id @default(cuid())
@@ -67,6 +67,25 @@ model BundleRule {
   bundleProductTitle String // Display name
   bundleSku          String? // Bundle SKU
 
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items    BundleItem[]
+  syncLogs SyncLog[]
+
+  @@unique([shopId, bundleVariantId]) // One variant can only be in one bundle rule per shop
+  @@index([shopId])
+  @@index([bundleVariantId])
+}
+
+model BundleItem {
+  id String @id @default(cuid())
+
+  bundleRuleId String
+  bundleRule   BundleRule @relation(fields: [bundleRuleId], references: [id], onDelete: Cascade)
+
   // Base (Master/Single) product info
   baseProductId       String // Shopify Product GID
   baseVariantId       String // Shopify ProductVariant GID
@@ -74,17 +93,10 @@ model BundleRule {
   baseSku             String? // Base product SKU
   baseInventoryItemId String // Shopify InventoryItem GID — used for stock adjustment
 
-  multiplier Int     @default(1) // e.g. 5 for a 5-pack
-  isActive   Boolean @default(true)
+  quantity Int @default(1) // Number of base items in this bundle
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  syncLogs SyncLog[]
-
-  @@unique([shopId, bundleVariantId]) // One variant can only be in one bundle rule per shop
-  @@index([shopId])
-  @@index([bundleVariantId])
+  @@index([bundleRuleId])
+  @@index([baseVariantId])
 }
 
 // ─── SyncLog — Record of every inventory adjustment ─────────────────────────────
@@ -95,17 +107,15 @@ model SyncLog {
   shopId       String
   shop         Shop        @relation(fields: [shopId], references: [id], onDelete: Cascade)
   bundleRuleId String?
-  bundleRule   BundleRule?  @relation(fields: [bundleRuleId], references: [id], onDelete: SetNull)
+  bundleRule   BundleRule? @relation(fields: [bundleRuleId], references: [id], onDelete: SetNull)
 
-  orderId String // Shopify Order GID
+  orderId   String // Shopify Order GID
   orderName String // e.g. "#1001"
 
   bundleVariantId String
-  baseVariantId   String
 
-  quantitySold    Int // Number of bundles sold
-  multiplier      Int // Multiplier applied
-  totalAdjustment Int // quantitySold × multiplier
+  // JSON summary of the items deducted: e.g. [{"baseVariantId": "...", "title": "Coffee", "quantitySold": 1, "multiplier": 2, "totalAdjustment": 2}]
+  itemsSummary String
 
   status       String  @default("pending") // "pending" | "success" | "failed" | "skipped"
   errorMessage String? // Error details if failed

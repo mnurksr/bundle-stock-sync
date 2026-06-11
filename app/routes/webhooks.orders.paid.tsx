@@ -42,6 +42,7 @@ async function processOrderPaid(shopDomain: string, payload: any, session: any) 
   // Get all active bundle rules for this shop
   const bundleRules = await db.bundleRule.findMany({
     where: { shopId: shop.id, isActive: true },
+    include: { items: true },
   });
 
   if (bundleRules.length === 0) {
@@ -69,9 +70,7 @@ async function processOrderPaid(shopDomain: string, payload: any, session: any) 
     session = offlineSession;
   }
 
-  // We need admin API access. For webhook handlers, we use the offline token.
-  // The session from authenticate.webhook should have the access token.
-  // We'll construct the admin client manually.
+  // We need admin API access.
   const accessToken = session?.accessToken;
   if (!accessToken) {
     console.log(`[Error] No access token available for ${shopDomain}`);
@@ -80,7 +79,6 @@ async function processOrderPaid(shopDomain: string, payload: any, session: any) 
 
   // Simple GraphQL client using fetch
   const adminGraphql = async (query: string, options?: { variables?: Record<string, any> }) => {
-    // Note: It's safer to use a stable API version instead of 2026-04 which might not exist
     const response = await fetch(`https://${shopDomain}/admin/api/2025-01/graphql.json`, {
       method: "POST",
       headers: {
@@ -129,10 +127,9 @@ async function processOrderPaid(shopDomain: string, payload: any, session: any) 
       continue;
     }
 
-    console.log(`Rule matched! Bundle: ${rule.bundleProductTitle}, Base: ${rule.baseProductTitle}, Multiplier: ${rule.multiplier}`);
+    console.log(`Rule matched! Bundle: ${rule.bundleProductTitle}, Items: ${rule.items.length}`);
 
-    const quantity = lineItem.quantity || 1;
-    const totalAdjustment = quantity * rule.multiplier;
+    const quantitySold = lineItem.quantity || 1;
     const idempotencyKey = `order-${payload.id}-line-${lineItem.id}-rule-${rule.id}`;
 
     // Check for duplicate processing
@@ -141,6 +138,16 @@ async function processOrderPaid(shopDomain: string, payload: any, session: any) 
       console.log(`Already processed: ${idempotencyKey}, skipping`);
       continue;
     }
+    
+    // Prepare items summary for log
+    const itemsSummaryArray = rule.items.map(item => ({
+      baseVariantId: item.baseVariantId,
+      title: item.baseProductTitle,
+      quantitySold,
+      multiplier: item.quantity,
+      totalAdjustment: quantitySold * item.quantity
+    }));
+    const itemsSummary = JSON.stringify(itemsSummaryArray);
 
     // Check quota
     const quotaCheck = await checkQuota(shopDomain);
@@ -152,10 +159,7 @@ async function processOrderPaid(shopDomain: string, payload: any, session: any) 
         orderId,
         orderName,
         bundleVariantId: rule.bundleVariantId,
-        baseVariantId: rule.baseVariantId,
-        quantitySold: quantity,
-        multiplier: rule.multiplier,
-        totalAdjustment,
+        itemsSummary,
         status: "skipped",
         errorMessage: `Free plan quota exceeded (${quotaCheck.used}/${quotaCheck.limit}). Upgrade to Pro for unlimited syncs.`,
         idempotencyKey,
@@ -170,27 +174,26 @@ async function processOrderPaid(shopDomain: string, payload: any, session: any) 
       orderId,
       orderName,
       bundleVariantId: rule.bundleVariantId,
-      baseVariantId: rule.baseVariantId,
-      quantitySold: quantity,
-      multiplier: rule.multiplier,
-      totalAdjustment,
+      itemsSummary,
       status: "pending",
       idempotencyKey,
     });
 
     try {
-      // Adjust inventory at each location
-      // For simplicity, we adjust at the first (primary) location
-      // In a more advanced version, you could adjust at the specific fulfillment location
       const primaryLocation = locations[0];
 
-      await adjustInventory(
-        admin,
-        rule.baseInventoryItemId,
-        primaryLocation.id,
-        -totalAdjustment, // Negative delta to decrease stock
-        "correction"
-      );
+      // Adjust inventory for each base item in the bundle
+      for (const item of rule.items) {
+        const totalAdjustment = quantitySold * item.quantity;
+        await adjustInventory(
+          admin as any,
+          item.baseInventoryItemId,
+          primaryLocation.id,
+          -totalAdjustment, // Negative delta to decrease stock
+          "correction"
+        );
+        console.log(`✅ Stock adjusted for ${shopDomain}: ${rule.bundleProductTitle} x${quantitySold} → ${item.baseProductTitle} -${totalAdjustment}`);
+      }
 
       // Update sync log to success
       await updateSyncLog(syncLog.id, {
@@ -201,7 +204,6 @@ async function processOrderPaid(shopDomain: string, payload: any, session: any) 
       // Increment sync count for quota tracking
       await incrementSyncCount(shopDomain);
 
-      console.log(`✅ Stock adjusted for ${shopDomain}: ${rule.bundleProductTitle} x${quantity} → ${rule.baseProductTitle} -${totalAdjustment}`);
     } catch (error: any) {
       console.error(`❌ Failed to adjust stock for ${shopDomain}:`, error);
       await updateSyncLog(syncLog.id, {
