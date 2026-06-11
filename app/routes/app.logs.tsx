@@ -172,7 +172,14 @@ export default function SyncLogsPage() {
            {isUpSync ? (
              <Text as="span" tone="success">{log.errorMessage || "Stock recalculated"}</Text>
            ) : (
-             <BlockStack gap="100">{itemsDescription}</BlockStack>
+             <BlockStack gap="100">
+               {itemsDescription}
+               {log.status === "failed" && log.errorMessage && (
+                 <Text as="span" variant="bodySm" tone="critical">
+                   Hata Nedeni: {log.errorMessage}
+                 </Text>
+               )}
+             </BlockStack>
            )}
         </IndexTable.Cell>
         <IndexTable.Cell>{statusBadge(log.status)}</IndexTable.Cell>
