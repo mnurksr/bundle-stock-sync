@@ -20,6 +20,105 @@ import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { useTranslation } from "../utils/i18n";
+import { useEffect } from "react";
+
+function RuleRow({ rule, index, navigate, handleToggle, handleDelete, t }: any) {
+  const fetcher = useFetcher<any>();
+
+  useEffect(() => {
+    // Only fetch if active, to save resources
+    if (rule.isActive) {
+      const formData = new FormData();
+      formData.append("bundleVariantId", rule.bundleVariantId);
+      formData.append(
+        "items",
+        JSON.stringify(
+          rule.items.map((item: any) => ({
+            baseVariantId: item.baseVariantId,
+            quantity: item.quantity,
+            title: item.title,
+          }))
+        )
+      );
+      fetcher.submit(formData, { method: "POST", action: "/api/bundle-capacity" });
+    }
+  }, [rule.id, rule.isActive]);
+
+  let hasOversellRisk = rule.hasOversellRisk; // Fallback from DB log
+  if (fetcher.data?.locations) {
+    hasOversellRisk = fetcher.data.locations.some(
+      (loc: any) => loc.currentBundleStock > loc.maxBundles
+    );
+  }
+
+  return (
+    <IndexTable.Row
+      id={rule.id}
+      key={rule.id}
+      position={index}
+      onClick={() => navigate(`/app/rules/${rule.id}`)}
+    >
+      <IndexTable.Cell>
+        <InlineStack gap="400" blockAlign="center">
+          <Thumbnail
+            source={
+              rule.imageUrl ||
+              "https://cdn.shopify.com/s/files/1/0533/2089/files/placeholder-images-image_large.png?format=webp&v=1530129081"
+            }
+            alt={rule.bundleProductTitle}
+            size="small"
+          />
+          <BlockStack gap="100">
+            <Text as="span" variant="bodyMd" fontWeight="semibold">
+              {rule.bundleProductTitle}
+            </Text>
+            {rule.bundleSku && (
+              <Text as="span" variant="bodySm" tone="subdued">
+                SKU: {rule.bundleSku}
+              </Text>
+            )}
+          </BlockStack>
+        </InlineStack>
+      </IndexTable.Cell>
+      <IndexTable.Cell>
+        <BlockStack gap="100">
+          {rule.items.map((item: any) => (
+            <InlineStack key={item.id} gap="200" align="start">
+              <Badge tone="magic">{`×${item.quantity}`}</Badge>
+              <Text as="span" variant="bodySm">
+                {item.title} {item.sku ? `(${item.sku})` : ""}
+              </Text>
+            </InlineStack>
+          ))}
+        </BlockStack>
+      </IndexTable.Cell>
+      <IndexTable.Cell>
+        <InlineStack gap="200" align="start">
+          {rule.isActive ? (
+            <Badge tone="success">{t("rules_active")}</Badge>
+          ) : (
+            <Badge tone="new">{t("rules_inactive")}</Badge>
+          )}
+          {hasOversellRisk && (
+            <Badge tone="critical">Oversell Risk</Badge>
+          )}
+        </InlineStack>
+      </IndexTable.Cell>
+      <IndexTable.Cell>
+        <div onClick={(e) => e.stopPropagation()}>
+          <InlineStack gap="200">
+            <Button size="slim" onClick={() => handleToggle(rule.id)}>
+              {rule.isActive ? t("rules_pause") : t("rules_activate")}
+            </Button>
+            <Button size="slim" tone="critical" onClick={() => handleDelete(rule.id)}>
+              {t("rules_btn_delete")}
+            </Button>
+          </InlineStack>
+        </div>
+      </IndexTable.Cell>
+    </IndexTable.Row>
+  );
+}
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
@@ -67,11 +166,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       bundleProductTitle: rule.bundleProductTitle,
       bundleSku: rule.bundleSku,
       imageUrl,
+      bundleVariantId: rule.bundleVariantId,
       items: rule.items.map(item => ({
         id: item.id,
         title: item.baseProductTitle,
         sku: item.baseSku,
         quantity: item.quantity,
+        baseVariantId: item.baseVariantId,
       })),
       isActive: rule.isActive,
       hasOversellRisk: rule.syncLogs?.[0]?.status === "failed" && rule.syncLogs?.[0]?.orderName === "Up-Sync Error",
@@ -154,76 +255,16 @@ export default function BundleRulesPage() {
     [fetcher]
   );
 
-  const rowMarkup = rules.map(({ id, bundleProductTitle, bundleSku, imageUrl, items, isActive, hasOversellRisk }, index) => (
-    <IndexTable.Row
-      id={id}
-      key={id}
-      position={index}
-      onClick={() => navigate(`/app/rules/${id}`)}
-    >
-      <IndexTable.Cell>
-        <InlineStack gap="400" blockAlign="center">
-          <Thumbnail
-            source={imageUrl || "https://cdn.shopify.com/s/files/1/0533/2089/files/placeholder-images-image_large.png?format=webp&v=1530129081"}
-            alt={bundleProductTitle}
-            size="small"
-          />
-          <BlockStack gap="100">
-            <Text as="span" variant="bodyMd" fontWeight="semibold">
-              {bundleProductTitle}
-            </Text>
-            {bundleSku && (
-              <Text as="span" variant="bodySm" tone="subdued">
-                SKU: {bundleSku}
-              </Text>
-            )}
-          </BlockStack>
-        </InlineStack>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <BlockStack gap="100">
-          {items.map((item) => (
-            <InlineStack key={item.id} gap="200" align="start">
-              <Badge tone="magic">{`×${item.quantity}`}</Badge>
-              <Text as="span" variant="bodySm">
-                {item.title} {item.sku ? `(${item.sku})` : ""}
-              </Text>
-            </InlineStack>
-          ))}
-        </BlockStack>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <InlineStack gap="200" align="start">
-          {isActive ? (
-            <Badge tone="success">{t("rules_active")}</Badge>
-          ) : (
-            <Badge tone="new">{t("rules_inactive")}</Badge>
-          )}
-          {hasOversellRisk && (
-            <Badge tone="critical">Oversell Risk</Badge>
-          )}
-        </InlineStack>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <div onClick={(e) => e.stopPropagation()}>
-          <InlineStack gap="200">
-            <Button
-              size="slim"
-              onClick={() => handleToggle(id)}
-            >
-              {isActive ? t("rules_pause") : t("rules_activate")}
-            </Button>
-            <Button
-              size="slim"
-              tone="critical"
-              onClick={() => handleDelete(id)}
-            >
-              {t("rules_btn_delete")}
-            </Button>
-          </InlineStack>
-        </div>
-      </IndexTable.Cell>
-    </IndexTable.Row>
+  const rowMarkup = rules.map((rule, index) => (
+    <RuleRow
+      key={rule.id}
+      rule={rule}
+      index={index}
+      navigate={navigate}
+      handleToggle={handleToggle}
+      handleDelete={handleDelete}
+      t={t}
+    />
   ));
 
   return (
