@@ -223,16 +223,6 @@ export default function SyncLogsPage() {
             <Text as="span" variant="bodySm" tone="subdued">
               {total} {t("logs_total")}
             </Text>
-            <Button
-              tone="critical"
-              onClick={() => {
-                if (confirm("Are you sure you want to COMPLETELY reset the database? This deletes all rules and logs.")) {
-                  submit({ intent: "nuke" }, { method: "post" });
-                }
-              }}
-            >
-              Temizle (Dev Reset)
-            </Button>
           </InlineStack>
         </Card>
 
