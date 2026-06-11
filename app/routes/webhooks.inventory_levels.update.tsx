@@ -58,6 +58,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const shop = await db.shop.findUnique({ where: { shopDomain } });
   if (!shop) return new Response();
 
+  // Check if auto-adjust is enabled for this shop
+  if (!shop.autoAdjustBundleStock) {
+    console.log(`[Up-Sync] Auto-adjust disabled for ${shopDomain}, skipping.`);
+    return new Response();
+  }
+
   const rules = await db.bundleRule.findMany({
     where: {
       shopId: shop.id,

@@ -14,6 +14,8 @@ import {
   Banner,
   Thumbnail,
   List,
+  Badge,
+  Divider,
 } from "@shopify/polaris";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
@@ -156,59 +158,31 @@ export default function EditBundleRulePage() {
   const [items, setItems] = useState<BundleItem[]>(initialItems);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [locationsMap, setLocationsMap] = useState<Record<string, string[]>>({});
-  const locationsFetcher = useFetcher();
+  const capacityFetcher = useFetcher();
+  const [capacityData, setCapacityData] = useState<any>(null);
 
   useEffect(() => {
-    const variantIdsToFetch: string[] = [];
-    if (bundleProduct?.variants[0]?.id) {
-      variantIdsToFetch.push(bundleProduct.variants[0].id);
-    }
-    items.forEach(item => {
-      if (item.variants[0]?.id) variantIdsToFetch.push(item.variants[0].id);
-    });
-
-    const missingIds = variantIdsToFetch.filter(id => !locationsMap[id]);
-    if (missingIds.length > 0) {
+    if (bundleProduct?.variants[0]?.id && items.length > 0) {
       const formData = new FormData();
-      formData.append("variantIds", JSON.stringify(missingIds));
-      locationsFetcher.submit(formData, { method: "POST", action: "/api/locations" });
+      formData.append("bundleVariantId", bundleProduct.variants[0].id);
+      formData.append("items", JSON.stringify(
+        items.map(item => ({
+          baseVariantId: item.variants[0].id,
+          quantity: item.quantity,
+          title: item.title,
+        }))
+      ));
+      capacityFetcher.submit(formData, { method: "POST", action: "/api/bundle-capacity" });
+    } else {
+      setCapacityData(null);
     }
   }, [bundleProduct, items]);
 
   useEffect(() => {
-    const data = locationsFetcher.data as any;
-    if (data?.locations) {
-      setLocationsMap(prev => ({ ...prev, ...data.locations }));
+    if (capacityFetcher.data) {
+      setCapacityData(capacityFetcher.data);
     }
-  }, [locationsFetcher.data]);
-
-  let mismatchedItems: string[] = [];
-  const bundleLocations = bundleProduct?.variants[0]?.id ? locationsMap[bundleProduct.variants[0].id] : [];
-
-  if (bundleLocations && bundleLocations.length > 0) {
-    items.forEach(item => {
-      const itemLocs = locationsMap[item.variants[0].id];
-      if (itemLocs) {
-        const hasIntersection = itemLocs.some(loc => bundleLocations.includes(loc));
-        if (!hasIntersection) {
-          mismatchedItems.push(item.title);
-        }
-      }
-    });
-  }
-
-  const bundleVariant = bundleProduct?.variants[0];
-  const bundleStock = bundleVariant?.inventoryQuantity ?? 0;
-
-  let expectedBundleStock = 0;
-  if (items.length > 0) {
-    expectedBundleStock = Math.min(
-      ...items.map((item) => Math.floor((item.variants[0]?.inventoryQuantity || 0) / Math.max(1, item.quantity)))
-    );
-  }
-
-  const oversellRisk = bundleProduct && items.length > 0 && bundleStock > expectedBundleStock;
+  }, [capacityFetcher.data]);
 
   const selectBundleProduct = useCallback(async () => {
     const selected = await shopify.resourcePicker({
@@ -358,7 +332,10 @@ export default function EditBundleRulePage() {
               <Card>
                 <BlockStack gap="400">
                   <Text as="h2" variant="headingMd">
-                    Included Items
+                    {t("rules_new_base_title") || "Items inside the bundle"}
+                  </Text>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    {t("rules_new_base_desc") || "Select the individual products that make up this bundle and define their quantities."}
                   </Text>
 
                   {items.length > 0 && (
@@ -379,7 +356,7 @@ export default function EditBundleRulePage() {
                             <div style={{ width: "80px" }}>
                               <TextField
                                 labelHidden
-                                label="Quantity"
+                                label={t("rules_new_quantity")}
                                 type="number"
                                 value={String(item.quantity)}
                                 onChange={(val) => updateItemQuantity(item.variants[0].id, val)}
@@ -388,7 +365,7 @@ export default function EditBundleRulePage() {
                               />
                             </div>
                             <Button onClick={() => removeItem(item.variants[0].id)} tone="critical" variant="plain">
-                              Remove
+                              {t("rules_new_remove")}
                             </Button>
                           </InlineStack>
                         </Card>
@@ -397,7 +374,7 @@ export default function EditBundleRulePage() {
                   )}
 
                   <Button onClick={addBaseProduct} variant="secondary" fullWidth>
-                    {items.length > 0 ? "Add another item" : t("rules_new_btn_select_base")}
+                    {items.length > 0 ? t("rules_new_add_another") : t("rules_new_btn_select_base")}
                   </Button>
                 </BlockStack>
               </Card>
@@ -406,32 +383,64 @@ export default function EditBundleRulePage() {
 
           <Layout.Section variant="oneThird">
             <BlockStack gap="500">
-              {(oversellRisk || mismatchedItems.length > 0) && (
+              {/* Location Capacity */}
+              {capacityData?.locations && capacityData.locations.length > 0 && (
                 <BlockStack gap="300">
-                  {mismatchedItems.length > 0 && (
-                    <Banner tone="critical" title="Location Mismatch">
-                      <p>
-                        The following base products are not stocked at any of the Bundle product's active locations:
-                      </p>
-                      <List type="bullet">
-                        {mismatchedItems.map((name, i) => (
-                          <List.Item key={i}>{name}</List.Item>
+                  <Text as="h2" variant="headingMd">
+                    {t("rules_new_loc_capacity")}
+                  </Text>
+                  {capacityData.locations.map((loc: any) => (
+                    <Card key={loc.locationId}>
+                      <BlockStack gap="300">
+                        <InlineStack align="space-between" blockAlign="center">
+                          <Text as="span" variant="bodyMd" fontWeight="bold">
+                            {loc.locationName}
+                          </Text>
+                          {loc.isSafe ? (
+                            <Badge tone="success">{t("rules_new_safe")}</Badge>
+                          ) : loc.blockers.length > 0 ? (
+                            <Badge tone="critical">{t("rules_new_blocked")}</Badge>
+                          ) : (
+                            <Badge tone="warning">{t("rules_new_oversell")}</Badge>
+                          )}
+                        </InlineStack>
+                        <InlineStack align="space-between">
+                          <Text as="span" variant="bodySm" tone="subdued">{t("rules_new_max_bundles")}</Text>
+                          <Text as="span" variant="bodySm" fontWeight="bold">{loc.maxBundles}</Text>
+                        </InlineStack>
+                        <InlineStack align="space-between">
+                          <Text as="span" variant="bodySm" tone="subdued">{t("rules_new_current_stock")}</Text>
+                          <Text as="span" variant="bodySm" fontWeight="bold">{loc.currentBundleStock}</Text>
+                        </InlineStack>
+                        <Divider />
+                        {loc.items.map((item: any, i: number) => (
+                          <InlineStack key={i} align="space-between" blockAlign="center">
+                            <Text as="span" variant="bodySm">
+                              {item.stocked ? "✅" : "❌"} {item.title}
+                            </Text>
+                            <Text as="span" variant="bodySm" tone="subdued">
+                              {item.stocked ? `${item.available} ÷ ${item.needed} = ${item.possible}` : t("rules_new_not_stocked")}
+                            </Text>
+                          </InlineStack>
                         ))}
-                      </List>
-                      <p style={{ marginTop: "10px" }}>
-                        Shopify will block inventory adjustments if base products aren't stocked at the bundle's location. Please activate them at the same location in Shopify Admin.
-                      </p>
-                    </Banner>
-                  )}
-                  {oversellRisk && (
-                    <Banner tone="warning" title={t("rules_new_oversell_title")}>
-                      <p>
-                        {`The bundle stock (${bundleStock}) is higher than the maximum possible bundles (${expectedBundleStock}) you can make from the current base items' stock. This could lead to overselling.`}
-                      </p>
-                      <p style={{ marginTop: "10px" }}>{t("rules_new_oversell_desc2")}</p>
-                    </Banner>
-                  )}
+                        {loc.blockers.length > 0 && (
+                          <Banner tone="critical">
+                            {loc.blockers.map((b: string, i: number) => (
+                              <p key={i}>{b}</p>
+                            ))}
+                          </Banner>
+                        )}
+                      </BlockStack>
+                    </Card>
+                  ))}
                 </BlockStack>
+              )}
+
+              {/* Loading state */}
+              {capacityFetcher.state === "submitting" && (
+                <Card>
+                  <Text as="p" variant="bodySm" tone="subdued">{t("rules_new_calculating")}</Text>
+                </Card>
               )}
 
               <Card>
@@ -440,10 +449,10 @@ export default function EditBundleRulePage() {
                     {t("rules_new_how_title")}
                   </Text>
                   <List type="number">
-                    <List.Item>Select the Bundle/Multipack product.</List.Item>
-                    <List.Item>Add all the Base items contained in the bundle.</List.Item>
-                    <List.Item>Specify how many of each base item goes into ONE bundle.</List.Item>
-                    <List.Item>Save! Stock will sync automatically.</List.Item>
+                    <List.Item>{t("rules_new_how_1")}</List.Item>
+                    <List.Item>{t("rules_new_how_2")}</List.Item>
+                    <List.Item>{t("rules_new_how_3")}</List.Item>
+                    <List.Item>{t("rules_new_how_4")}</List.Item>
                   </List>
                 </BlockStack>
               </Card>

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData, useActionData, useFetcher, Form, useNavigation } from "@remix-run/react";
 import {
@@ -76,6 +76,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       plan: shop!.plan,
       syncCount: shop!.syncCount,
       installedAt: shop!.installedAt.toISOString(),
+      autoAdjustBundleStock: shop!.autoAdjustBundleStock,
     },
     monthlySyncs,
     totalRules,
@@ -94,12 +95,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const { session } = await authenticate.admin(request);
     const shop = session.shop.replace(".myshopify.com", "");
     
-    // Instead of using Billing API (which throws an error when Managed Pricing is enabled),
-    // we redirect the merchant to the Shopify-hosted Managed Pricing page.
-    // The handle is "bundle-stock-sync-3" based on the user's screenshots.
     const redirectUrl = `https://admin.shopify.com/store/${shop}/charges/bundle-stock-sync-3/pricing_plans`;
     
     return { redirectUrl, success: true, error: undefined, details: undefined };
+  }
+
+  if (intent === "updateSettings") {
+    const shopDomain = session.shop;
+    const autoAdjust = formData.get("autoAdjustBundleStock") === "true";
+    
+    await db.shop.update({
+      where: { shopDomain },
+      data: { autoAdjustBundleStock: autoAdjust },
+    });
+
+    return { success: true, error: undefined, details: undefined, redirectUrl: undefined };
   }
 
   return { error: "Unknown action", details: undefined, success: undefined, redirectUrl: undefined };
@@ -115,6 +125,8 @@ export default function SettingsPage() {
   const { t } = useTranslation();
 
   const isFree = shop.plan === "free";
+  const [autoAdjust, setAutoAdjust] = useState(shop.autoAdjustBundleStock);
+  const settingsFetcher = useFetcher();
   const quotaUsagePercent = isFree
     ? Math.round((monthlySyncs / quotaLimit) * 100)
     : 0;
@@ -289,6 +301,51 @@ export default function SettingsPage() {
                       )}
                     </BlockStack>
                   </Box>
+                </BlockStack>
+              </Card>
+
+              {/* Stock Sync Behavior */}
+              <Card>
+                <BlockStack gap="400">
+                  <Text as="h2" variant="headingMd">
+                    Stock Sync Behavior
+                  </Text>
+                  <Divider />
+                  <InlineStack align="space-between" blockAlign="center">
+                    <BlockStack gap="100">
+                      <Text as="span" variant="bodyMd" fontWeight="semibold">
+                        Auto-Adjust Bundle Stock
+                      </Text>
+                      <Text as="span" variant="bodySm" tone="subdued">
+                        Automatically recalculate bundle stock when base product inventory changes.
+                      </Text>
+                    </BlockStack>
+                    <Button
+                      variant={autoAdjust ? "primary" : "secondary"}
+                      onClick={() => {
+                        const newVal = !autoAdjust;
+                        setAutoAdjust(newVal);
+                        const formData = new FormData();
+                        formData.append("intent", "updateSettings");
+                        formData.append("autoAdjustBundleStock", String(newVal));
+                        settingsFetcher.submit(formData, { method: "POST" });
+                      }}
+                    >
+                      {autoAdjust ? "Enabled" : "Disabled"}
+                    </Button>
+                  </InlineStack>
+                  {autoAdjust ? (
+                    <Banner tone="info">
+                      <p>Bundle stock will be automatically kept at the safe maximum based on available base product stock at each location.</p>
+                    </Banner>
+                  ) : (
+                    <Banner tone="warning">
+                      <p>Bundle stock is only deducted when orders are placed. You need to manually manage bundle stock levels.</p>
+                    </Banner>
+                  )}
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    Note: Order-based stock deductions always work regardless of this setting.
+                  </Text>
                 </BlockStack>
               </Card>
             </BlockStack>
