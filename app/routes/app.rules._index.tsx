@@ -33,7 +33,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const rules = await db.bundleRule.findMany({
     where: { shopId: shop.id },
     orderBy: { createdAt: "desc" },
-    include: { items: true },
+    include: { 
+      items: true,
+      syncLogs: {
+        orderBy: { createdAt: "desc" },
+        take: 1
+      }
+    },
   });
 
   const rulesWithImages = await Promise.all(rules.map(async (rule) => {
@@ -68,6 +74,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         quantity: item.quantity,
       })),
       isActive: rule.isActive,
+      hasOversellRisk: rule.syncLogs?.[0]?.status === "failed" && rule.syncLogs?.[0]?.orderName === "Up-Sync Error",
       createdAt: rule.createdAt.toISOString(),
     };
   }));
@@ -147,27 +154,27 @@ export default function BundleRulesPage() {
     [fetcher]
   );
 
-  const rowMarkup = rules.map((rule, index) => (
+  const rowMarkup = rules.map(({ id, bundleProductTitle, bundleSku, imageUrl, items, isActive, hasOversellRisk }, index) => (
     <IndexTable.Row
-      id={rule.id}
-      key={rule.id}
+      id={id}
+      key={id}
       position={index}
-      onClick={() => navigate(`/app/rules/${rule.id}`)}
+      onClick={() => navigate(`/app/rules/${id}`)}
     >
       <IndexTable.Cell>
         <InlineStack gap="400" blockAlign="center">
           <Thumbnail
-            source={rule.imageUrl || "https://cdn.shopify.com/s/files/1/0533/2089/files/placeholder-images-image_large.png?format=webp&v=1530129081"}
-            alt={rule.bundleProductTitle}
+            source={imageUrl || "https://cdn.shopify.com/s/files/1/0533/2089/files/placeholder-images-image_large.png?format=webp&v=1530129081"}
+            alt={bundleProductTitle}
             size="small"
           />
           <BlockStack gap="100">
             <Text as="span" variant="bodyMd" fontWeight="semibold">
-              {rule.bundleProductTitle}
+              {bundleProductTitle}
             </Text>
-            {rule.bundleSku && (
+            {bundleSku && (
               <Text as="span" variant="bodySm" tone="subdued">
-                SKU: {rule.bundleSku}
+                SKU: {bundleSku}
               </Text>
             )}
           </BlockStack>
@@ -175,7 +182,7 @@ export default function BundleRulesPage() {
       </IndexTable.Cell>
       <IndexTable.Cell>
         <BlockStack gap="100">
-          {rule.items.map((item) => (
+          {items.map((item) => (
             <InlineStack key={item.id} gap="200" align="start">
               <Badge tone="magic">{`×${item.quantity}`}</Badge>
               <Text as="span" variant="bodySm">
@@ -186,25 +193,30 @@ export default function BundleRulesPage() {
         </BlockStack>
       </IndexTable.Cell>
       <IndexTable.Cell>
-        {rule.isActive ? (
-          <Badge tone="success">{t("rules_active")}</Badge>
-        ) : (
-          <Badge tone="new">{t("rules_inactive")}</Badge>
-        )}
+        <InlineStack gap="200" align="start">
+          {isActive ? (
+            <Badge tone="success">{t("rules_active")}</Badge>
+          ) : (
+            <Badge tone="new">{t("rules_inactive")}</Badge>
+          )}
+          {hasOversellRisk && (
+            <Badge tone="critical">Oversell Risk</Badge>
+          )}
+        </InlineStack>
       </IndexTable.Cell>
       <IndexTable.Cell>
         <div onClick={(e) => e.stopPropagation()}>
           <InlineStack gap="200">
             <Button
               size="slim"
-              onClick={() => handleToggle(rule.id)}
+              onClick={() => handleToggle(id)}
             >
-              {rule.isActive ? t("rules_pause") : t("rules_activate")}
+              {isActive ? t("rules_pause") : t("rules_activate")}
             </Button>
             <Button
               size="slim"
               tone="critical"
-              onClick={() => handleDelete(rule.id)}
+              onClick={() => handleDelete(id)}
             >
               {t("rules_btn_delete")}
             </Button>

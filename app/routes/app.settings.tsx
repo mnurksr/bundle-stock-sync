@@ -304,50 +304,7 @@ export default function SettingsPage() {
                 </BlockStack>
               </Card>
 
-              {/* Stock Sync Behavior */}
-              <Card>
-                <BlockStack gap="400">
-                  <Text as="h2" variant="headingMd">
-                    Stock Sync Behavior
-                  </Text>
-                  <Divider />
-                  <InlineStack align="space-between" blockAlign="center">
-                    <BlockStack gap="100">
-                      <Text as="span" variant="bodyMd" fontWeight="semibold">
-                        Auto-Adjust Bundle Stock
-                      </Text>
-                      <Text as="span" variant="bodySm" tone="subdued">
-                        Automatically recalculate bundle stock when base product inventory changes.
-                      </Text>
-                    </BlockStack>
-                    <Button
-                      variant={autoAdjust ? "primary" : "secondary"}
-                      onClick={() => {
-                        const newVal = !autoAdjust;
-                        setAutoAdjust(newVal);
-                        const formData = new FormData();
-                        formData.append("intent", "updateSettings");
-                        formData.append("autoAdjustBundleStock", String(newVal));
-                        settingsFetcher.submit(formData, { method: "POST" });
-                      }}
-                    >
-                      {autoAdjust ? "Enabled" : "Disabled"}
-                    </Button>
-                  </InlineStack>
-                  {autoAdjust ? (
-                    <Banner tone="info">
-                      <p>Bundle stock will be automatically kept at the safe maximum based on available base product stock at each location.</p>
-                    </Banner>
-                  ) : (
-                    <Banner tone="warning">
-                      <p>Bundle stock is only deducted when orders are placed. You need to manually manage bundle stock levels.</p>
-                    </Banner>
-                  )}
-                  <Text as="p" variant="bodySm" tone="subdued">
-                    Note: Order-based stock deductions always work regardless of this setting.
-                  </Text>
-                </BlockStack>
-              </Card>
+
             </BlockStack>
           </Layout.Section>
 

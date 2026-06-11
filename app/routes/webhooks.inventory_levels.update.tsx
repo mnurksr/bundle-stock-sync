@@ -31,38 +31,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const gidInventoryItemId = `gid://shopify/InventoryItem/${inventoryItemIdNumber}`;
   const gidLocationId = `gid://shopify/Location/${locationIdNumber}`;
 
-  // 1. Find the Variant ID for this Inventory Item
-  let variantId = null;
-  try {
-    const variantResponse = await admin.graphql(
-      `#graphql
-      query getVariantForInventoryItem($query: String!) {
-        productVariants(first: 1, query: $query) {
-          edges {
-            node {
-              id
-            }
-          }
-        }
-      }`,
-      {
-        variables: { query: `inventory_item_id:${inventoryItemIdNumber}` },
-      }
-    );
-
-    const variantData = await variantResponse.json();
-    variantId = variantData.data?.productVariants?.edges?.[0]?.node?.id;
-  } catch (error) {
-    console.error("GraphQL Error fetching variant for inventory item:", error);
-    return new Response();
-  }
-
-  if (!variantId) {
-    // Inventory item doesn't belong to a variant or is deleted
-    return new Response();
-  }
-
-  // 2. Check if this variant is a BASE product in any bundle rules
+  // 2. Check if this inventory item is a BASE product in any bundle rules
   const shop = await db.shop.findUnique({ where: { shopDomain } });
   if (!shop) return new Response();
 
@@ -77,7 +46,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       shopId: shop.id,
       items: {
         some: {
-          baseVariantId: variantId,
+          baseInventoryItemId: gidInventoryItemId,
         }
       }
     },
@@ -97,7 +66,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     for (const item of rule.items) {
       let stockForThisItem = 0;
       
-      if (item.baseVariantId === variantId) {
+      if (item.baseInventoryItemId === gidInventoryItemId) {
         stockForThisItem = newAvailableCount;
       } else {
         // Fetch from Shopify
