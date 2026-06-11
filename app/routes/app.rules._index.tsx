@@ -161,21 +161,23 @@ export default function BundleRulesPage() {
         )}
       </IndexTable.Cell>
       <IndexTable.Cell>
-        <InlineStack gap="200">
-          <Button
-            size="slim"
-            onClick={() => handleToggle(rule.id)}
-          >
-            {rule.isActive ? t("rules_pause") : t("rules_activate")}
-          </Button>
-          <Button
-            size="slim"
-            tone="critical"
-            onClick={() => handleDelete(rule.id)}
-          >
-            {t("rules_btn_delete")}
-          </Button>
-        </InlineStack>
+        <div onClick={(e) => e.stopPropagation()}>
+          <InlineStack gap="200">
+            <Button
+              size="slim"
+              onClick={() => handleToggle(rule.id)}
+            >
+              {rule.isActive ? t("rules_pause") : t("rules_activate")}
+            </Button>
+            <Button
+              size="slim"
+              tone="critical"
+              onClick={() => handleDelete(rule.id)}
+            >
+              {t("rules_btn_delete")}
+            </Button>
+          </InlineStack>
+        </div>
       </IndexTable.Cell>
     </IndexTable.Row>
   ));
