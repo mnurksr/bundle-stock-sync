@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { useLoaderData, useSearchParams, useNavigate } from "@remix-run/react";
+import { useLoaderData, useSearchParams, useNavigate, useSubmit } from "@remix-run/react";
 import {
   Page,
   Layout,
@@ -19,6 +19,20 @@ import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { useTranslation } from "../utils/i18n";
+
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const formData = await request.formData();
+  
+  if (formData.get("intent") === "nuke") {
+    await db.bundleItem.deleteMany();
+    await db.bundleRule.deleteMany();
+    await db.syncLog.deleteMany();
+    await db.shop.updateMany({ data: { syncCount: 0 } });
+    return { ok: true };
+  }
+  return null;
+};
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -80,6 +94,7 @@ export default function SyncLogsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const submit = useSubmit();
 
   const handleStatusChange = (value: string) => {
     const params = new URLSearchParams(searchParams);
@@ -207,6 +222,16 @@ export default function SyncLogsPage() {
             <Text as="span" variant="bodySm" tone="subdued">
               {total} {t("logs_total")}
             </Text>
+            <Button
+              tone="critical"
+              onClick={() => {
+                if (confirm("Are you sure you want to COMPLETELY reset the database? This deletes all rules and logs.")) {
+                  submit({ intent: "nuke" }, { method: "post" });
+                }
+              }}
+            >
+              Temizle (Dev Reset)
+            </Button>
           </InlineStack>
         </Card>
 
