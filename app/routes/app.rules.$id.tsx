@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
-import { useLoaderData, useActionData, useNavigate, useSubmit } from "@remix-run/react";
-import { useState, useCallback } from "react";
+import { useLoaderData, useActionData, useNavigate, useSubmit, useFetcher } from "@remix-run/react";
+import { useState, useCallback, useEffect } from "react";
 import {
   Page,
   Layout,
@@ -155,6 +155,60 @@ export default function EditBundleRulePage() {
   
   const [items, setItems] = useState<BundleItem[]>(initialItems);
   const [isSaving, setIsSaving] = useState(false);
+
+  const [locationsMap, setLocationsMap] = useState<Record<string, string[]>>({});
+  const locationsFetcher = useFetcher();
+
+  useEffect(() => {
+    const variantIdsToFetch: string[] = [];
+    if (bundleProduct?.variants[0]?.id) {
+      variantIdsToFetch.push(bundleProduct.variants[0].id);
+    }
+    items.forEach(item => {
+      if (item.variants[0]?.id) variantIdsToFetch.push(item.variants[0].id);
+    });
+
+    const missingIds = variantIdsToFetch.filter(id => !locationsMap[id]);
+    if (missingIds.length > 0) {
+      const formData = new FormData();
+      formData.append("variantIds", JSON.stringify(missingIds));
+      locationsFetcher.submit(formData, { method: "POST", action: "/api/locations" });
+    }
+  }, [bundleProduct, items]);
+
+  useEffect(() => {
+    const data = locationsFetcher.data as any;
+    if (data?.locations) {
+      setLocationsMap(prev => ({ ...prev, ...data.locations }));
+    }
+  }, [locationsFetcher.data]);
+
+  let mismatchedItems: string[] = [];
+  const bundleLocations = bundleProduct?.variants[0]?.id ? locationsMap[bundleProduct.variants[0].id] : [];
+
+  if (bundleLocations && bundleLocations.length > 0) {
+    items.forEach(item => {
+      const itemLocs = locationsMap[item.variants[0].id];
+      if (itemLocs) {
+        const hasIntersection = itemLocs.some(loc => bundleLocations.includes(loc));
+        if (!hasIntersection) {
+          mismatchedItems.push(item.title);
+        }
+      }
+    });
+  }
+
+  const bundleVariant = bundleProduct?.variants[0];
+  const bundleStock = bundleVariant?.inventoryQuantity ?? 0;
+
+  let expectedBundleStock = 0;
+  if (items.length > 0) {
+    expectedBundleStock = Math.min(
+      ...items.map((item) => Math.floor((item.variants[0]?.inventoryQuantity || 0) / Math.max(1, item.quantity)))
+    );
+  }
+
+  const oversellRisk = bundleProduct && items.length > 0 && bundleStock > expectedBundleStock;
 
   const selectBundleProduct = useCallback(async () => {
     const selected = await shopify.resourcePicker({
@@ -345,6 +399,52 @@ export default function EditBundleRulePage() {
                   <Button onClick={addBaseProduct} variant="secondary" fullWidth>
                     {items.length > 0 ? "Add another item" : t("rules_new_btn_select_base")}
                   </Button>
+                </BlockStack>
+              </Card>
+            </BlockStack>
+          </Layout.Section>
+
+          <Layout.Section variant="oneThird">
+            <BlockStack gap="500">
+              {(oversellRisk || mismatchedItems.length > 0) && (
+                <BlockStack gap="300">
+                  {mismatchedItems.length > 0 && (
+                    <Banner tone="critical" title="Location Mismatch">
+                      <p>
+                        The following base products are not stocked at any of the Bundle product's active locations:
+                      </p>
+                      <List type="bullet">
+                        {mismatchedItems.map((name, i) => (
+                          <List.Item key={i}>{name}</List.Item>
+                        ))}
+                      </List>
+                      <p style={{ marginTop: "10px" }}>
+                        Shopify will block inventory adjustments if base products aren't stocked at the bundle's location. Please activate them at the same location in Shopify Admin.
+                      </p>
+                    </Banner>
+                  )}
+                  {oversellRisk && (
+                    <Banner tone="warning" title={t("rules_new_oversell_title")}>
+                      <p>
+                        {`The bundle stock (${bundleStock}) is higher than the maximum possible bundles (${expectedBundleStock}) you can make from the current base items' stock. This could lead to overselling.`}
+                      </p>
+                      <p style={{ marginTop: "10px" }}>{t("rules_new_oversell_desc2")}</p>
+                    </Banner>
+                  )}
+                </BlockStack>
+              )}
+
+              <Card>
+                <BlockStack gap="300">
+                  <Text as="h2" variant="headingMd">
+                    {t("rules_new_how_title")}
+                  </Text>
+                  <List type="number">
+                    <List.Item>Select the Bundle/Multipack product.</List.Item>
+                    <List.Item>Add all the Base items contained in the bundle.</List.Item>
+                    <List.Item>Specify how many of each base item goes into ONE bundle.</List.Item>
+                    <List.Item>Save! Stock will sync automatically.</List.Item>
+                  </List>
                 </BlockStack>
               </Card>
             </BlockStack>
