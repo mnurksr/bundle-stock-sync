@@ -42,6 +42,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     hasActiveSubscription = false;
   }
 
+  // Dev override for shopiauto-test
+  if (shopDomain === "shopiauto-test.myshopify.com") {
+    hasActiveSubscription = true;
+  }
+
   // Sync plan status with billing
   if (hasActiveSubscription && shop.plan !== "pro") {
     await db.shop.update({
