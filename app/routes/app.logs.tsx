@@ -161,7 +161,7 @@ export default function SyncLogsPage() {
     } catch(e) {}
     
     const itemsDescription = summaryData.map((item: any, i: number) => (
-      <Text key={i} as="p" variant="bodySm" tone="critical">
+      <Text key={i} as="p" variant="bodySm" tone={log.status === "failed" ? "critical" : "base"}>
         {item.title}: -{item.totalAdjustment} (Sold {item.quantitySold} x {item.multiplier})
       </Text>
     ));
