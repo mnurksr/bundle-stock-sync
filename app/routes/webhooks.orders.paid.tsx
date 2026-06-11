@@ -199,14 +199,30 @@ async function processOrderPaid(shopDomain: string, payload: any, session: any) 
       for (const item of rule.items) {
         const totalAdjustment = quantitySold * item.quantity;
         
+        let deductionLocationId = targetLocationId;
+
+        // Ensure the base item is actually stocked at the targetLocationId
+        try {
+          const itemLocations = await getInventoryLocations(admin as any, item.baseInventoryItemId);
+          const isStockedAtTarget = itemLocations.some(l => l.locationId === targetLocationId);
+          
+          if (!isStockedAtTarget && itemLocations.length > 0) {
+            // Fallback to the first location where the base item IS stocked
+            deductionLocationId = itemLocations[0].locationId;
+            console.log(`[Warning] Base item ${item.baseProductTitle} is not stocked at bundle location, falling back to ${deductionLocationId}`);
+          }
+        } catch(e) {
+          console.log(`[Warning] Could not check item locations for ${item.baseProductTitle}`);
+        }
+
         await adjustInventory(
           admin as any,
           item.baseInventoryItemId,
-          targetLocationId,
+          deductionLocationId,
           -totalAdjustment, // Negative delta to decrease stock
           "correction"
         );
-        console.log(`✅ Stock adjusted for ${shopDomain}: ${rule.bundleProductTitle} x${quantitySold} → ${item.baseProductTitle} -${totalAdjustment} at ${targetLocationId}`);
+        console.log(`✅ Stock adjusted for ${shopDomain}: ${rule.bundleProductTitle} x${quantitySold} → ${item.baseProductTitle} -${totalAdjustment} at ${deductionLocationId}`);
       }
 
       // Update sync log to success
