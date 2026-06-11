@@ -396,12 +396,12 @@ export default function EditBundleRulePage() {
                           <Text as="span" variant="bodyMd" fontWeight="bold">
                             {loc.locationName}
                           </Text>
-                          {loc.isSafe ? (
-                            <Badge tone="success">{t("rules_new_safe")}</Badge>
-                          ) : loc.blockers.length > 0 ? (
-                            <Badge tone="critical">{t("rules_new_blocked")}</Badge>
-                          ) : (
+                          {!loc.isSafe ? (
                             <Badge tone="warning">{t("rules_new_oversell")}</Badge>
+                          ) : loc.maxBundles === 0 ? (
+                            <Badge>{t("rules_new_out_of_stock")}</Badge>
+                          ) : (
+                            <Badge tone="success">{t("rules_new_safe")}</Badge>
                           )}
                         </InlineStack>
                         <InlineStack align="space-between">
@@ -415,21 +415,14 @@ export default function EditBundleRulePage() {
                         <Divider />
                         {loc.items.map((item: any, i: number) => (
                           <InlineStack key={i} align="space-between" blockAlign="center">
-                            <Text as="span" variant="bodySm">
-                              {item.stocked ? "✅" : "❌"} {item.title}
+                            <Text as="span" variant="bodySm" tone={item.stocked && item.available > 0 ? undefined : "subdued"}>
+                              {item.title}
                             </Text>
-                            <Text as="span" variant="bodySm" tone="subdued">
-                              {item.stocked ? `${item.available} ÷ ${item.needed} = ${item.possible}` : t("rules_new_not_stocked")}
+                            <Text as="span" variant="bodySm" tone={item.stocked && item.available >= item.needed ? "success" : "critical"} fontWeight="bold">
+                              {item.stocked ? `${item.available} ${t("rules_new_available")}` : t("rules_new_not_stocked")}
                             </Text>
                           </InlineStack>
                         ))}
-                        {loc.blockers.length > 0 && (
-                          <Banner tone="critical">
-                            {loc.blockers.map((b: string, i: number) => (
-                              <p key={i}>{b}</p>
-                            ))}
-                          </Banner>
-                        )}
                       </BlockStack>
                     </Card>
                   ))}
