@@ -37,9 +37,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   // Check if auto-adjust is enabled for this shop
   if (!shop.autoAdjustBundleStock) {
-    console.log(`[Up-Sync] Auto-adjust disabled for ${shopDomain}, skipping.`);
     return new Response();
   }
+
+  // LOG: Webhook Received
+  await createSyncLog({
+    shopId: shop.id,
+    orderId: `webhook-trace-${Date.now()}`,
+    orderName: "Diagnostic: Webhook Received",
+    bundleVariantId: "trace",
+    status: "success",
+    errorMessage: `Received inventory_item_id: ${inventoryItemIdNumber}, location: ${locationIdNumber}, available: ${newAvailableCount}`,
+    idempotencyKey: `trace-1-${Date.now()}`
+  });
 
   const rules = await db.bundleRule.findMany({
     where: {
@@ -54,9 +64,29 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   });
 
   if (rules.length === 0) {
-    // This product is not a base product for any bundle, ignore it.
+    // LOG: No Rules Found
+    await createSyncLog({
+      shopId: shop.id,
+      orderId: `webhook-trace-${Date.now()}`,
+      orderName: "Diagnostic: No Rules Found",
+      bundleVariantId: "trace",
+      status: "success",
+      errorMessage: `Could not find any bundle rule containing inventory_item_id: ${gidInventoryItemId}`,
+      idempotencyKey: `trace-2-${Date.now()}`
+    });
     return new Response();
   }
+  
+  // LOG: Rules Found
+  await createSyncLog({
+    shopId: shop.id,
+    orderId: `webhook-trace-${Date.now()}`,
+    orderName: "Diagnostic: Rules Found",
+    bundleVariantId: "trace",
+    status: "success",
+    errorMessage: `Found ${rules.length} rule(s) for this item. Proceeding to calculate stock.`,
+    idempotencyKey: `trace-3-${Date.now()}`
+  });
 
   // 3. Update the stock for each connected bundle product
   for (const rule of rules) {
@@ -150,8 +180,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const currentBundleStock = bundleInventoryData.data?.inventoryItem?.inventoryLevel?.quantities?.[0]?.quantity || 0;
 
       if (currentBundleStock === newBundleStock) {
-        console.log(`[Up-Sync] Echo prevented: Bundle stock for rule ${rule.id} is already ${newBundleStock}.`);
-        continue; // Skip Shopify API call and skip logging!
+        await createSyncLog({
+          shopId: shop.id,
+          bundleRuleId: rule.id,
+          orderId: `webhook-trace-${Date.now()}`,
+          orderName: "Diagnostic: Echo Prevented",
+          bundleVariantId: rule.bundleVariantId,
+          status: "success",
+          errorMessage: `Calculated new stock is ${newBundleStock}, but current stock is already ${newBundleStock}. Skipping API call.`,
+          idempotencyKey: `trace-echo-${rule.id}-${Date.now()}`
+        });
+        continue;
       }
 
       // SET the absolute stock for the bundle product at the same location targeting "available" directly
