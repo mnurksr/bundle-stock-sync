@@ -215,17 +215,32 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       } else {
         console.log(`Successfully synced UP bundle stock for rule ${rule.id} to ${newBundleStock} (Available)`);
         
-        await createSyncLog({
-          shopId: shop.id,
-          orderId: `inventory-${payload.updated_at || Date.now()}`,
-          orderName: "Base Stock Changed",
-          bundleRuleId: rule.id,
-          bundleVariantId: rule.bundleVariantId,
-          itemsSummary,
-          status: "success",
-          errorMessage: `Bundle stock updated to: ${newBundleStock}`,
-          idempotencyKey: `up-sync-${rule.id}-${payload.updated_at || Date.now()}`
+        // --- VISUAL ECHO PREVENTER ---
+        const fifteenSecondsAgo = new Date(Date.now() - 15 * 1000);
+        const recentOrderLog = await db.syncLog.findFirst({
+          where: {
+            shopId: shop.id,
+            bundleRuleId: rule.id,
+            orderName: { notIn: ["Base Stock Changed", "Auto Up-Sync", "Up-Sync Error"] },
+            createdAt: { gte: fifteenSecondsAgo }
+          }
         });
+
+        if (recentOrderLog) {
+          console.log(`[Up-Sync] Suppressing log because Order ${recentOrderLog.orderName} just occurred.`);
+        } else {
+          await createSyncLog({
+            shopId: shop.id,
+            orderId: `inventory-${payload.updated_at || Date.now()}`,
+            orderName: "Base Stock Changed",
+            bundleRuleId: rule.id,
+            bundleVariantId: rule.bundleVariantId,
+            itemsSummary,
+            status: "success",
+            errorMessage: `Bundle stock updated to: ${newBundleStock}`,
+            idempotencyKey: `up-sync-${rule.id}-${payload.updated_at || Date.now()}`
+          });
+        }
       }
     } catch (error) {
       console.error(`Error processing up-sync for rule ${rule.id}:`, error);
