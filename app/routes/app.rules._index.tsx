@@ -14,6 +14,7 @@ import {
   Button,
   Modal,
   ButtonGroup,
+  Thumbnail,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
@@ -21,7 +22,7 @@ import db from "../db.server";
 import { useTranslation } from "../utils/i18n";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const shopDomain = session.shop;
 
   const shop = await db.shop.findUnique({ where: { shopDomain } });
@@ -35,11 +36,31 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     include: { items: true },
   });
 
-  return {
-    rules: rules.map((rule) => ({
+  const rulesWithImages = await Promise.all(rules.map(async (rule) => {
+    let imageUrl = null;
+    try {
+      const response = await admin.graphql(
+        `#graphql
+        query getProductImage($id: ID!) {
+          product(id: $id) {
+            featuredImage {
+              url
+            }
+          }
+        }`,
+        { variables: { id: rule.bundleProductId } }
+      );
+      const data = await response.json();
+      imageUrl = data.data?.product?.featuredImage?.url || null;
+    } catch (e) {
+      // Ignore
+    }
+
+    return {
       id: rule.id,
       bundleProductTitle: rule.bundleProductTitle,
       bundleSku: rule.bundleSku,
+      imageUrl,
       items: rule.items.map(item => ({
         id: item.id,
         title: item.baseProductTitle,
@@ -48,7 +69,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       })),
       isActive: rule.isActive,
       createdAt: rule.createdAt.toISOString(),
-    })),
+    };
+  }));
+
+  return {
+    rules: rulesWithImages,
   };
 };
 
@@ -130,16 +155,23 @@ export default function BundleRulesPage() {
       onClick={() => navigate(`/app/rules/${rule.id}`)}
     >
       <IndexTable.Cell>
-        <BlockStack gap="100">
-          <Text as="span" variant="bodyMd" fontWeight="semibold">
-            {rule.bundleProductTitle}
-          </Text>
-          {rule.bundleSku && (
-            <Text as="span" variant="bodySm" tone="subdued">
-              SKU: {rule.bundleSku}
+        <InlineStack gap="400" blockAlign="center">
+          <Thumbnail
+            source={rule.imageUrl || "https://cdn.shopify.com/s/files/1/0533/2089/files/placeholder-images-image_large.png?format=webp&v=1530129081"}
+            alt={rule.bundleProductTitle}
+            size="small"
+          />
+          <BlockStack gap="100">
+            <Text as="span" variant="bodyMd" fontWeight="semibold">
+              {rule.bundleProductTitle}
             </Text>
-          )}
-        </BlockStack>
+            {rule.bundleSku && (
+              <Text as="span" variant="bodySm" tone="subdued">
+                SKU: {rule.bundleSku}
+              </Text>
+            )}
+          </BlockStack>
+        </InlineStack>
       </IndexTable.Cell>
       <IndexTable.Cell>
         <BlockStack gap="100">
