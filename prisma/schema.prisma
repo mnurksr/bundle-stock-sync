@@ -115,7 +115,7 @@ model SyncLog {
   bundleVariantId String
 
   // JSON summary of the items deducted: e.g. [{"baseVariantId": "...", "title": "Coffee", "quantitySold": 1, "multiplier": 2, "totalAdjustment": 2}]
-  itemsSummary String
+  itemsSummary String  @default("[]")
 
   status       String  @default("pending") // "pending" | "success" | "failed" | "skipped"
   errorMessage String? // Error details if failed

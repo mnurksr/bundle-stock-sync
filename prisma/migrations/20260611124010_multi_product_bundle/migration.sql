@@ -43,6 +43,7 @@ CREATE TABLE "new_BundleRule" (
     CONSTRAINT "BundleRule_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 INSERT INTO "new_BundleRule" ("bundleProductId", "bundleProductTitle", "bundleSku", "bundleVariantId", "createdAt", "id", "isActive", "shopId", "updatedAt") SELECT "bundleProductId", "bundleProductTitle", "bundleSku", "bundleVariantId", "createdAt", "id", "isActive", "shopId", "updatedAt" FROM "BundleRule";
+INSERT INTO "BundleItem" ("id", "bundleRuleId", "baseProductId", "baseVariantId", "baseProductTitle", "baseSku", "baseInventoryItemId", "quantity") SELECT hex(randomblob(12)), "id", "baseProductId", "baseVariantId", "baseProductTitle", "baseSku", "baseInventoryItemId", "multiplier" FROM "BundleRule";
 DROP TABLE "BundleRule";
 ALTER TABLE "new_BundleRule" RENAME TO "BundleRule";
 CREATE INDEX "BundleRule_shopId_idx" ON "BundleRule"("shopId");
@@ -55,7 +56,7 @@ CREATE TABLE "new_SyncLog" (
     "orderId" TEXT NOT NULL,
     "orderName" TEXT NOT NULL,
     "bundleVariantId" TEXT NOT NULL,
-    "itemsSummary" TEXT NOT NULL,
+    "itemsSummary" TEXT NOT NULL DEFAULT '[]',
     "status" TEXT NOT NULL DEFAULT 'pending',
     "errorMessage" TEXT,
     "idempotencyKey" TEXT NOT NULL,
