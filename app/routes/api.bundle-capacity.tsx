@@ -51,6 +51,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                   name
                 }
                 quantities(names: ["available"]) {
+                  name
                   quantity
                 }
               }
@@ -93,6 +94,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                     id
                   }
                   quantities(names: ["available"]) {
+                    name
                     quantity
                   }
                 }
