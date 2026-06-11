@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { useLoaderData, useSearchParams, useNavigate, useSubmit } from "@remix-run/react";
+import { useLoaderData, useSearchParams, useNavigate } from "@remix-run/react";
 import {
   Page,
   Layout,
@@ -19,20 +19,6 @@ import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { useTranslation } from "../utils/i18n";
-
-export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
-  const shopDomain = session.shop;
-  const shop = await db.shop.findUnique({ where: { shopDomain } });
-  
-  if (shop) {
-    const formData = await request.formData();
-    if (formData.get("action") === "clearLogs") {
-      await db.syncLog.deleteMany({ where: { shopId: shop.id } });
-    }
-  }
-  return null;
-};
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -93,14 +79,7 @@ export default function SyncLogsPage() {
     useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const submit = useSubmit();
   const { t } = useTranslation();
-
-  const handleClearLogs = () => {
-    if (confirm(t("logs_clear_confirm"))) {
-      submit({ action: "clearLogs" }, { method: "post" });
-    }
-  };
 
   const handleStatusChange = (value: string) => {
     const params = new URLSearchParams(searchParams);
@@ -203,11 +182,7 @@ export default function SyncLogsPage() {
 
   return (
     <Page fullWidth>
-      <TitleBar title={t("logs_title")}>
-        <button onClick={handleClearLogs}>
-          {t("logs_clear")}
-        </button>
-      </TitleBar>
+      <TitleBar title={t("logs_title")} />
 
       <BlockStack gap="500">
         {/* Filters */}
