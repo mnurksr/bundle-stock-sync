@@ -271,7 +271,7 @@ export default function SettingsPage() {
                           Pro Plan
                         </Text>
                         <Text as="span" variant="headingMd">
-                          $3/mo
+                          $7.99/mo
                         </Text>
                       </InlineStack>
                       <List>
