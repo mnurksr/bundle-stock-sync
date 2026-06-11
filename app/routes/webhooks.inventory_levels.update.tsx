@@ -32,22 +32,30 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const gidLocationId = `gid://shopify/Location/${locationIdNumber}`;
 
   // 1. Find the Variant ID for this Inventory Item
-  const variantResponse = await admin.graphql(
-    `#graphql
-    query getVariantForInventoryItem($id: ID!) {
-      inventoryItem(id: $id) {
-        variant {
-          id
+  let variantId = null;
+  try {
+    const variantResponse = await admin.graphql(
+      `#graphql
+      query getVariantForInventoryItem($query: String!) {
+        productVariants(first: 1, query: $query) {
+          edges {
+            node {
+              id
+            }
+          }
         }
+      }`,
+      {
+        variables: { query: `inventory_item_id:${inventoryItemIdNumber}` },
       }
-    }`,
-    {
-      variables: { id: gidInventoryItemId },
-    }
-  );
+    );
 
-  const variantData = await variantResponse.json();
-  const variantId = variantData.data?.inventoryItem?.variant?.id;
+    const variantData = await variantResponse.json();
+    variantId = variantData.data?.productVariants?.edges?.[0]?.node?.id;
+  } catch (error) {
+    console.error("GraphQL Error fetching variant for inventory item:", error);
+    return new Response();
+  }
 
   if (!variantId) {
     // Inventory item doesn't belong to a variant or is deleted
