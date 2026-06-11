@@ -151,9 +151,10 @@ export default function SyncLogsPage() {
 
   const rowMarkup = logs.map((log, index) => {
     const isUpSync = log.orderName.includes("Up-Sync") || log.orderName === "Base Stock Changed";
+    const isDiagnostic = log.orderName.includes("Diagnostic");
     
     // Format Event Name
-    const eventName = isUpSync ? t("logs_event_up_sync") : t("logs_event_order", { orderName: log.orderName });
+    const eventName = (isUpSync || isDiagnostic) ? log.orderName : t("logs_event_order", { orderName: log.orderName });
     
     let summaryData: any[] = [];
     try {
@@ -184,8 +185,8 @@ export default function SyncLogsPage() {
           </Text>
         </IndexTable.Cell>
         <IndexTable.Cell>
-           {isUpSync ? (
-             <Text as="span" tone="success">{log.errorMessage || "Stock recalculated"}</Text>
+           {(isUpSync || isDiagnostic) ? (
+             <Text as="span" tone={log.status === "failed" ? "critical" : "success"}>{log.errorMessage || "Stock recalculated"}</Text>
            ) : (
              <BlockStack gap="100">
                {itemsDescription}
